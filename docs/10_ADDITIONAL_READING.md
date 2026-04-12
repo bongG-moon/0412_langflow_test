@@ -1,11 +1,11 @@
-# 시작하기
+# 추가 읽을거리 안내
 
-이 문서는 LangGraph 버전을 처음 보는 사람이 가장 먼저 읽는 안내서입니다.  
-목표는 "이 앱이 무엇을 하는지", "어떤 화면이 있는지", "LangGraph 버전이 왜 따로 있는지"를 빠르게 이해하는 것입니다.
+이 문서는 `docs/00~09`를 읽은 뒤 더 자세한 배경 설명과 보조 문서를 보고 싶은 사람을 위한 안내서입니다.
+목표는 이 프로젝트와 관련된 추가 읽기 포인트를 빠르게 안내하는 것입니다.
 
 ## 1. 이 앱은 무엇을 하는가
 
-이 앱은 제조 데이터를 자연어 질문으로 조회하는 도구입니다.  
+이 앱은 제조 데이터를 자연어 질문으로 조회하는 도구입니다.
 단순 조회만 하는 것이 아니라, 필요하면 같은 턴에서 바로 후처리까지 수행합니다.
 
 예:
@@ -40,14 +40,14 @@
 ## 3. 실행 방법
 
 ```bash
-cd C:\Users\qkekt\Desktop\AGENT_COMPACT_LANGGRAPH
+cd C:\Users\qkekt\Desktop\langflow_local_manufacturing_project
 streamlit run app.py
 ```
 
-## 4. 이 버전이 LangGraph인 이유
+## 4. 이 프로젝트에서 LangGraph가 중요한 이유
 
-기본 버전은 함수가 순서대로 이어지는 구조입니다.  
-LangGraph 버전은 그 흐름을 `StateGraph` 노드로 분리해 실행합니다.
+이 프로젝트의 코어 실행 흐름은 LangGraph 구조를 기준으로 정리되어 있습니다.
+Langflow와 Streamlit은 이 흐름을 재사용하거나 시각화하는 레이어입니다.
 
 현재 큰 흐름은 아래와 같습니다.
 
@@ -85,7 +85,7 @@ run_agent()
 어제 DA공정에서 DDR5제품 생산 달성률 알려줘
 ```
 
-이 질문은 LangGraph 내부에서 필요한 데이터셋 계획과 후처리를 연결하는지 보기 좋습니다.
+이 질문은 내부에서 필요한 데이터셋 계획과 후처리를 연결하는지 보기 좋습니다.
 
 ## 6. 도메인 관리 화면에서는 무엇을 하나
 
@@ -107,18 +107,14 @@ run_agent()
 현재는 DB가 아니라 파일 기반입니다.
 
 - 기본 도메인 지식
-  - [`core/domain_knowledge.py`](/Users/qkekt/Desktop/AGENT_COMPACT_LANGGRAPH/core/domain_knowledge.py)
+  - [`manufacturing_agent/domain/knowledge.py`](../manufacturing_agent/domain/knowledge.py)
 - 사용자 등록 도메인
-  - [`reference_materials/domain_registry/entries`](/Users/qkekt/Desktop/AGENT_COMPACT_LANGGRAPH/reference_materials/domain_registry/entries)
+  - [`reference_materials/domain_registry/entries`](../reference_materials/domain_registry/entries)
 
 즉, 사용자 등록 엔트리는 JSON 파일로 저장됩니다.
 
 ## 8. 다음으로 읽으면 좋은 문서
 
-1. [`MANUFACTURING_AGENT_ROADMAP.md`](/Users/qkekt/Desktop/AGENT_COMPACT_LANGGRAPH/reference_materials/docs/MANUFACTURING_AGENT_ROADMAP.md)
-2. [`MANUFACTURING_AGENT_SLIDES.md`](/Users/qkekt/Desktop/AGENT_COMPACT_LANGGRAPH/reference_materials/docs/MANUFACTURING_AGENT_SLIDES.md)
-3. [`MANUFACTURING_AGENT_DIAGRAMS.md`](/Users/qkekt/Desktop/AGENT_COMPACT_LANGGRAPH/reference_materials/docs/MANUFACTURING_AGENT_DIAGRAMS.md)
-4. [`RUN_CHECKLIST.md`](/Users/qkekt/Desktop/AGENT_COMPACT_LANGGRAPH/reference_materials/docs/RUN_CHECKLIST.md)
-5. [`QUESTION_GUIDE.md`](/Users/qkekt/Desktop/AGENT_COMPACT_LANGGRAPH/reference_materials/docs/QUESTION_GUIDE.md)
-6. [`LANGGRAPH_DESIGN.md`](/Users/qkekt/Desktop/AGENT_COMPACT_LANGGRAPH/reference_materials/docs/LANGGRAPH_DESIGN.md)
-7. [`DOMAIN_GUIDE.md`](/Users/qkekt/Desktop/AGENT_COMPACT_LANGGRAPH/reference_materials/docs/DOMAIN_GUIDE.md)
+1. [`03_BUILD_FLOW.md`](./03_BUILD_FLOW.md)
+2. [`04_FUNCTION_GUIDE.md`](./04_FUNCTION_GUIDE.md)
+3. [`11_DOMAIN_AND_USAGE_GUIDE.md`](./11_DOMAIN_AND_USAGE_GUIDE.md)
