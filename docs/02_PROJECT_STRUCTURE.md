@@ -6,6 +6,7 @@
 
 ```text
 langflow_local_manufacturing_project/
+├─ .codex/
 ├─ custom_components/
 ├─ manufacturing_agent/
 ├─ langflow_version/
@@ -34,6 +35,18 @@ Langflow 캔버스에 보이는 커스텀 노드가 있습니다.
 - branch router 노드
 - 결과 생성/마무리 노드
 - 세션 메모리/결과 merge 노드
+
+## `.codex`
+
+프로젝트 로컬 하네스와 스킬 파일이 있습니다.
+
+### `harness/`
+
+다른 도구에서도 같은 결과를 재현하기 위한 기준 하네스가 들어 있습니다.
+
+### `skills/`
+
+Codex CLI 등에서 재사용할 수 있는 프로젝트 로컬 스킬이 들어 있습니다.
 
 ## `manufacturing_agent`
 
@@ -94,6 +107,10 @@ Langflow가 쓰기 쉬운 형태로 감싼 adapter/helper 계층입니다.
   - 도메인 등록, 질문 작성, 초보자용 확장 가이드 통합 문서
 - `docs/12_LANGFLOW_MIGRATION_ISSUES.md`
   - Langflow 전환 과정의 오류와 수정 기록
+- `docs/13_AGENT_HARNESS.md`
+  - 다른 도구에서도 같은 결과를 재현하기 위한 하네스 기준 문서
+- `docs/14_LOCAL_SKILLS.md`
+  - 프로젝트 로컬 스킬 안내
 
 즉, 지금은 설명 문서를 번호 체계 안으로 모으고, 별도 보조 문서는 최소화한 상태입니다.
 

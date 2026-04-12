@@ -3,6 +3,37 @@
 이 프로젝트는 기존 LangGraph 기반 제조 분석 에이전트를
 Langflow와 Streamlit에서 모두 사용할 수 있도록 정리한 로컬 프로젝트입니다.
 
+## 작업 시작 전 원칙
+
+이 저장소에서 새 작업을 시작할 때는 먼저 아래 파일을 기준으로 작업합니다.
+
+- 하네스:
+  - [`.codex/harness/manufacturing-agent/HARNESS.md`](.codex/harness/manufacturing-agent/HARNESS.md)
+- 스킬:
+  - [`.codex/skills/manufacturing-agent-harness/SKILL.md`](.codex/skills/manufacturing-agent-harness/SKILL.md)
+  - 필요에 따라 다른 `.codex/skills/*/SKILL.md`
+
+즉, 구현을 바로 바꾸기 전에 "현재 이 프로젝트의 기준 하네스와 스킬이 무엇을 요구하는지"를 먼저 확인하는 것을 기본 원칙으로 둡니다.
+
+## 작업 중 유지보수 원칙
+
+작업을 진행하다가 아래와 같은 일이 생기면, 코드만 고치고 끝내지 말고 하네스와 스킬도 함께 점검해야 합니다.
+
+- 반복적으로 같은 오류가 발생함
+- 초기 가정과 다른 원인으로 문제를 해결하게 됨
+- 분기 기준, 상태 계약, 세션 처리 방식이 바뀜
+- 개발 방향 자체가 달라짐
+- 특정 도구에서만 통하던 방식이 다른 도구에서는 깨짐
+
+이 경우에는 아래를 같이 수행합니다.
+
+1. 원인과 수정 내용을 코드에 반영
+2. 필요하면 `docs/12_LANGFLOW_MIGRATION_ISSUES.md`에 사례 추가
+3. 하네스 기준이 바뀌었으면 `.codex/harness/...` 문서 갱신
+4. 반복 작업 절차가 바뀌었으면 `.codex/skills/.../SKILL.md` 갱신
+
+즉, 하네스와 스킬은 고정 문서가 아니라 구현과 함께 계속 업데이트되는 운영 기준입니다.
+
 핵심 방향은 아래와 같습니다.
 
 - 코어 비즈니스 로직은 `manufacturing_agent`에 유지
@@ -50,11 +81,14 @@ Langflow 캔버스/멀티턴/Streamlit 사용 문서를 바로 보고 싶다면 
 - [docs/10_ADDITIONAL_READING.md](docs/10_ADDITIONAL_READING.md)
 - [docs/11_DOMAIN_AND_USAGE_GUIDE.md](docs/11_DOMAIN_AND_USAGE_GUIDE.md)
 - [docs/12_LANGFLOW_MIGRATION_ISSUES.md](docs/12_LANGFLOW_MIGRATION_ISSUES.md)
+- [docs/13_AGENT_HARNESS.md](docs/13_AGENT_HARNESS.md)
+- [docs/14_LOCAL_SKILLS.md](docs/14_LOCAL_SKILLS.md)
 
 ## 디렉토리 개요
 
 ```text
 langflow_local_manufacturing_project/
+├─ .codex/
 ├─ custom_components/
 ├─ manufacturing_agent/
 ├─ langflow_version/
@@ -70,6 +104,8 @@ langflow_local_manufacturing_project/
 
 - `custom_components`
   - Langflow가 직접 읽는 커스텀 노드
+- `.codex`
+  - 프로젝트 로컬 하네스와 스킬 파일
 - `manufacturing_agent`
   - 실제 제조 분석 코어 로직
 - `langflow_version`

@@ -26,6 +26,8 @@
 11. [10_ADDITIONAL_READING.md](10_ADDITIONAL_READING.md)
 12. [11_DOMAIN_AND_USAGE_GUIDE.md](11_DOMAIN_AND_USAGE_GUIDE.md)
 13. [12_LANGFLOW_MIGRATION_ISSUES.md](12_LANGFLOW_MIGRATION_ISSUES.md)
+14. [13_AGENT_HARNESS.md](13_AGENT_HARNESS.md)
+15. [14_LOCAL_SKILLS.md](14_LOCAL_SKILLS.md)
 
 ## 구현/사용 문서
 
@@ -55,6 +57,10 @@
   - 도메인 등록, 질문 작성, 초보자용 확장 가이드 통합 문서
 - `12_LANGFLOW_MIGRATION_ISSUES`
   - Langflow 전환 과정에서 겪은 오류와 수정 사례 정리
+- `13_AGENT_HARNESS`
+  - 다른 도구에서도 같은 결과를 재현하기 위한 하네스 기준 문서
+- `14_LOCAL_SKILLS`
+  - 프로젝트 로컬 `.codex/skills` 스킬 안내
 
 ## 문서 정리 기준
 
@@ -62,6 +68,8 @@
 - 추가 읽기 안내는 `10`
 - 도메인 등록과 질문 사용 가이드는 `11`
 - 전환 이슈와 트러블슈팅 기록은 `12`
+- 하네스 기준 문서는 `13`
+- 로컬 스킬 안내는 `14`
 
 ## 참고
 

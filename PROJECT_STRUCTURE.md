@@ -6,6 +6,7 @@
 
 ```text
 langflow_local_manufacturing_project/
+├─ .codex/
 ├─ custom_components/
 ├─ manufacturing_agent/
 ├─ langflow_version/
@@ -30,6 +31,15 @@ Langflow가 직접 읽는 커스텀 노드가 있습니다.
   - 입력/출력 포트 정의
   - Langflow 캔버스용 branch 노드
   - core 로직을 호출하는 thin wrapper
+
+### `.codex`
+
+프로젝트 로컬 하네스와 스킬 파일이 있습니다.
+
+- `harness/`
+  - 다른 도구에서도 같은 결과를 재현하기 위한 기준 계약
+- `skills/`
+  - 반복 작업용 실행 지침
 
 ### `manufacturing_agent`
 
@@ -70,8 +80,10 @@ Langflow에서 재사용하기 쉽게 만든 workflow/state adapter가 있습니
   - `docs/10_ADDITIONAL_READING.md`
   - `docs/11_DOMAIN_AND_USAGE_GUIDE.md`
   - `docs/12_LANGFLOW_MIGRATION_ISSUES.md`
+  - `docs/13_AGENT_HARNESS.md`
+  - `docs/14_LOCAL_SKILLS.md`
 
-즉, 구현 설명부터 추가 읽기, 도메인/질문 가이드, 전환 이슈 기록까지 모두 `docs/` 루트 아래의 번호 문서로 정리합니다.
+즉, 구현 설명부터 추가 읽기, 도메인/질문 가이드, 전환 이슈 기록, 하네스와 스킬 안내까지 모두 `docs/` 루트 아래의 번호 문서로 정리합니다.
 
 ### `reference_materials`
 
