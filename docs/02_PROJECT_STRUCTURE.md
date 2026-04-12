@@ -28,13 +28,12 @@ Langflow 캔버스에 보이는 커스텀 노드가 있습니다.
 
 여기에는 아래 종류의 노드가 있습니다.
 
-- 입력/초기화 노드
+- 세션 메모리/초기화 노드
 - 요청 해석 노드
 - retrieval 준비 노드
 - 실행 노드
 - branch router 노드
-- 결과 생성/마무리 노드
-- 세션 메모리/결과 merge 노드
+- 결과 생성/merge 노드
 
 ## `.codex`
 
@@ -85,13 +84,12 @@ Streamlit UI helper가 있습니다.
 
 ## `langflow_version`
 
-Langflow가 쓰기 쉬운 형태로 감싼 adapter/helper 계층입니다.
+Langflow가 쓰기 쉬운 형태로 감싼 최소 helper 계층입니다.
 
 주요 파일:
 
 - `workflow.py`
 - `component_base.py`
-- `components.py`
 
 ## `docs`
 

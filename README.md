@@ -109,7 +109,7 @@ langflow_local_manufacturing_project/
 - `manufacturing_agent`
   - 실제 제조 분석 코어 로직
 - `langflow_version`
-  - Langflow 전용 state/workflow adapter
+  - Langflow 전용 payload helper와 초기 state helper
 - `docs`
   - 구현 설명, 사용 가이드, 이론, 참고 문서를 통합한 문서 루트
 - `reference_materials`
@@ -118,22 +118,17 @@ langflow_local_manufacturing_project/
 
 ## 현재 추천 사용 방식
 
-### Langflow에서 빠르게 전체 실행
+### Langflow 분기 가시형 플로우
 
-- `Manufacturing Agent`
-
-### LangGraph와 유사한 압축 실행 플로우
-
-- `Manufacturing State Input`
-- `Resolve Manufacturing Request`
-- `Run Manufacturing Branch`
-- `Finish Manufacturing Result`
-
-### 분기까지 드러내는 Langflow 플로우
-
+- `Chat Input`
+- `Manufacturing Session Memory`
+- `Extract Manufacturing Params`
+- `Decide Manufacturing Query Mode`
 - query mode 분기
+- dataset planning / job build
 - retrieval plan 분기
 - single/multi post-processing 분기
+- `Merge Final Manufacturing Result`
 
 ### Streamlit UI
 

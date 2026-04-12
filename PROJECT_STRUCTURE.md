@@ -23,7 +23,7 @@ langflow_local_manufacturing_project/
 
 ### `custom_components`
 
-Langflow가 직접 읽는 커스텀 노드가 있습니다.
+Langflow가 직접 읽는 분기 가시형 커스텀 노드가 있습니다.
 
 - 실제 노드 구현 위치:
   - `custom_components/manufacturing_nodes/`
@@ -62,14 +62,12 @@ Langflow가 직접 읽는 커스텀 노드가 있습니다.
 
 ### `langflow_version`
 
-Langflow에서 재사용하기 쉽게 만든 workflow/state adapter가 있습니다.
+Langflow에서 재사용하기 쉽게 만든 최소 helper 계층이 있습니다.
 
 - `workflow.py`
-  - LangGraph와 유사한 순서로 단계 실행
+  - 세션 메모리 노드가 재사용하는 초기 state helper
 - `component_base.py`
   - Langflow `Data` payload helper
-- `components.py`
-  - 통합 helper 모음
 
 ### `docs`
 

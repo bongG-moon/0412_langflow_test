@@ -1,5 +1,5 @@
-"""제조 에이전트의 Langflow 전용 구현 레이어."""
+"""Manufacturing-agent Langflow helper layer."""
 
-from .workflow import run_langflow_workflow
+from .workflow import build_initial_state
 
-__all__ = ["run_langflow_workflow"]
+__all__ = ["build_initial_state"]

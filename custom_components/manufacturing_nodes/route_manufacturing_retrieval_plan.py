@@ -52,7 +52,7 @@ class RouteManufacturingRetrievalPlanComponent(Component):
     icon = "GitFork"
     name = "route_manufacturing_retrieval_plan"
 
-    inputs = [DataInput(name="state", display_name="State", info="State after plan_manufacturing_retrieval")]
+    inputs = [DataInput(name="state", display_name="State", info="State after dataset planning and job build")]
     outputs = [
         Output(name="finish_state", display_name="Finish State", method="finish_state", group_outputs=True, types=["Data"], selected="Data"),
         Output(name="single_state", display_name="Single Retrieval State", method="single_state", group_outputs=True, types=["Data"], selected="Data"),
@@ -95,5 +95,4 @@ class RouteManufacturingRetrievalPlanComponent(Component):
 
         state, route = self._resolve()
         return make_branch_data(route == "multi_retrieval", {"state": state})
-
 

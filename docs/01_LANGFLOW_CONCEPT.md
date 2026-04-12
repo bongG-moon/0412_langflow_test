@@ -79,30 +79,19 @@ state 기반으로 통일하면 장점이 큽니다.
 - LangGraph와 다른 기준으로 판단
 - 다른 노드에서도 같은 로직을 중복 작성
 
-## 압축형 노드와 분해형 노드
+## 분해형 노드 중심 구조
 
-이 프로젝트에는 두 가지 스타일이 공존합니다.
-
-### 압축형 노드
-
-예:
-
-- `Resolve Manufacturing Request`
-- `Run Manufacturing Branch`
-
-특징:
-
-- LangGraph의 여러 단계를 한 노드 안에서 감쌉니다.
-- 실행 결과를 빨리 확인하기 좋습니다.
-- 캔버스는 단순해지지만 내부 분기는 덜 보입니다.
+현재 프로젝트의 Langflow 구현은 분해형 노드를 기준으로 정리되어 있습니다.
 
 ### 분해형 노드
 
 예:
 
+- `Manufacturing Session Memory`
 - `Extract Manufacturing Params`
 - `Decide Manufacturing Query Mode`
-- `Plan Manufacturing Retrieval`
+- `Plan Manufacturing Datasets`
+- `Build Manufacturing Jobs`
 - `Route Manufacturing Query Mode`
 
 특징:
@@ -110,6 +99,7 @@ state 기반으로 통일하면 장점이 큽니다.
 - 단계별 책임이 분리돼 있습니다.
 - 분기와 상태 변화를 눈으로 확인하기 좋습니다.
 - 디버깅과 설명에 유리합니다.
+- 멀티턴도 session memory와 merge node로 자연스럽게 연결할 수 있습니다.
 
 ## 분기형 포트가 왜 중요한가
 

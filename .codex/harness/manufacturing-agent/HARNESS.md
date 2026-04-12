@@ -29,7 +29,7 @@ Preserve the same execution semantics across tools:
 3. Decide whether you can call repo code directly.
 4. Prefer one of these entrypoints:
    - `manufacturing_agent/agent.py::run_agent_with_progress`
-   - `langflow_version/workflow.py::run_langflow_workflow`
+   - `manufacturing_agent/agent.py::run_agent`
 5. If you are building a branch-visible flow, preserve the canonical branch split:
    - follow-up vs retrieval
    - finish vs single vs multi
@@ -45,13 +45,7 @@ Preserve the same execution semantics across tools:
 
 Use this when the tool can run Python directly and you want the closest behavior to the current Streamlit app.
 
-### Second option: Langflow adapter
-
-- `langflow_version/workflow.py::run_langflow_workflow`
-
-Use this when you need a tool-neutral sequential adapter that mirrors the LangGraph structure without requiring the full graph runtime.
-
-### Third option: branch-visible orchestration
+### Second option: branch-visible orchestration
 
 Use the branch-visible Langflow-compatible structure only when you need step-by-step visibility, debugging, or external orchestration.
 

@@ -1,84 +1,105 @@
 # 분기 가시형 Langflow 플로우
 
-이 문서는 기존 LangGraph의 주요 분기 구조를 Langflow 캔버스에서도
-눈에 보이게 표현하는 방법을 설명합니다.
+이 문서는 현재 프로젝트에서 유지하는 Langflow 구조를 설명합니다.
 
-목표는 단순합니다.
+지금 기준의 원칙은 단순합니다.
 
-- LangGraph의 비즈니스 로직은 그대로 유지
-- Langflow에서는 주요 분기점이 포트로 드러나게 구성
-- 디버깅과 설명이 쉬운 캔버스 형태로 정리
+- 단일 통합 노드와 압축형 단계 노드는 제거
+- LangGraph의 분기 구조를 눈에 보이게 하는 분해형 노드만 유지
+- 멀티턴은 session memory와 merge node를 통해 연결
 
 ## 드러내고 싶은 분기
 
-이번 설계에서 캔버스에 보이도록 만든 분기는 아래 3가지입니다.
+캔버스에 보이도록 유지하는 핵심 분기는 아래 3가지입니다.
 
 - 후속 질문인지, 신규 조회인지
 - 조회 계획 후 바로 종료인지, 단일 조회인지, 다중 조회인지
-- 조회 후 후처리가 필요한지, 바로 응답 가능한지
+- 조회 후 바로 응답 가능한지, 추가 분석이 필요한지
 
-## 추가된 분기 노드
+## 현재 유지하는 핵심 노드
 
-아래 노드들이 `custom_components/manufacturing_nodes/` 아래에 추가되었습니다.
+`custom_components/manufacturing_nodes/` 아래에서 분기형 구현에 필요한 노드는 아래와 같습니다.
 
+- `manufacturing_session_memory.py`
+- `extract_manufacturing_params.py`
+- `decide_manufacturing_query_mode.py`
+- `plan_manufacturing_datasets.py`
+- `build_manufacturing_jobs.py`
 - `route_manufacturing_query_mode.py`
 - `route_manufacturing_retrieval_plan.py`
+- `execute_manufacturing_jobs.py`
 - `route_single_post_processing.py`
 - `route_multi_post_processing.py`
 - `build_single_retrieval_response.py`
 - `run_single_retrieval_post_analysis.py`
 - `build_multi_retrieval_response.py`
 - `run_multi_retrieval_analysis.py`
+- `run_manufacturing_followup.py`
+- `merge_final_manufacturing_result.py`
 
 ## 추천 분기 구조
 
 ```mermaid
-flowchart TD
-  A["Manufacturing State Input"]
-  B["Extract Manufacturing Params"]
-  C["Decide Manufacturing Query Mode"]
-  R1{"Route Manufacturing Query Mode"}
-  F["Run Manufacturing Followup"]
-  P["Plan Manufacturing Retrieval"]
-  R2{"Route Manufacturing Retrieval Plan"}
-  E1["Execute Manufacturing Jobs"]
-  E2["Execute Manufacturing Jobs"]
-  R3{"Route Single Post Processing"}
-  R4{"Route Multi Post Processing"}
-  S0["Build Single Retrieval Response"]
-  S1["Run Single Retrieval Post Analysis"]
-  M0["Build Multi Retrieval Response"]
-  M1["Run Multi Retrieval Analysis"]
-  Z1["Finish Manufacturing Result"]
-  Z2["Finish Manufacturing Result"]
-  Z3["Finish Manufacturing Result"]
-  Z4["Finish Manufacturing Result"]
-  Z5["Finish Manufacturing Result"]
+flowchart LR
+  CI["Chat Input"]
+  SL["Manufacturing Session Memory (load)"]
+  EP["Extract Manufacturing Params"]
+  QM["Decide Manufacturing Query Mode"]
+  RQM{"Route Manufacturing Query Mode"}
+  FU["Run Manufacturing Followup"]
+  PD["Plan Manufacturing Datasets"]
+  BJ["Build Manufacturing Jobs"]
+  RRP{"Route Manufacturing Retrieval Plan"}
+  ES["Execute Manufacturing Jobs (single)"]
+  EM["Execute Manufacturing Jobs (multi)"]
+  RSP{"Route Single Post Processing"}
+  RMP{"Route Multi Post Processing"}
+  BSD["Build Single Retrieval Response"]
+  SSA["Run Single Retrieval Post Analysis"]
+  BMO["Build Multi Retrieval Response"]
+  MPA["Run Multi Retrieval Analysis"]
+  MF["Merge Final Manufacturing Result"]
 
-  A --> B --> C --> R1
-  R1 -->|"followup"| F --> Z1
-  R1 -->|"retrieval"| P --> R2
-  R2 -->|"finish"| Z2
-  R2 -->|"single"| E1 --> R3
-  R2 -->|"multi"| E2 --> R4
-  R3 -->|"direct"| S0 --> Z3
-  R3 -->|"post analysis"| S1 --> Z4
-  R4 -->|"overview"| M0 --> Z5
-  R4 -->|"post analysis"| M1 --> Z5
+  CI -->|"message -> message"| SL
+  SL -->|"session_state -> state"| EP
+  EP -->|"state_with_params -> state"| QM
+  QM -->|"state_with_mode -> state"| RQM
+  RQM -->|"followup_state -> state"| FU
+  FU -->|"followup_state -> followup_result"| MF
+  RQM -->|"retrieval_state -> state"| PD
+  PD -->|"state_with_plan -> state"| BJ
+  BJ -->|"state_with_jobs -> state"| RRP
+  RRP -->|"finish_state -> finish_result"| MF
+  RRP -->|"single_state -> state"| ES
+  ES -->|"state_with_source_results -> state"| RSP
+  RSP -->|"direct_response_state -> state"| BSD
+  BSD -->|"response_state -> single_direct_result"| MF
+  RSP -->|"post_analysis_state -> state"| SSA
+  SSA -->|"analysis_state -> single_analysis_result"| MF
+  RRP -->|"multi_state -> state"| EM
+  EM -->|"state_with_source_results -> state"| RMP
+  RMP -->|"overview_state -> state"| BMO
+  BMO -->|"response_state -> multi_overview_result"| MF
+  RMP -->|"post_analysis_state -> state"| MPA
+  MPA -->|"analysis_state -> multi_analysis_result"| MF
 ```
 
 ## 각 노드 역할
 
-- `Manufacturing State Input`
-  - 초기 state를 생성합니다.
+- `Chat Input`
+  - 사용자 질문과 session id를 시작점으로 제공합니다.
+- `Manufacturing Session Memory`
+  - 이전 `chat_history`, `context`, `current_data`를 읽어 시작 state를 만듭니다.
 - `Extract Manufacturing Params`
   - 날짜, 공정, 제품 등 조회 파라미터를 추출합니다.
 - `Decide Manufacturing Query Mode`
   - follow-up인지 retrieval인지 판단합니다.
 - `Route Manufacturing Query Mode`
-  - LangGraph의 첫 번째 분기를 Langflow 포트로 노출합니다.
-- `Plan Manufacturing Retrieval`
-  - retrieval plan, dataset key, retrieval job을 준비합니다.
+  - 첫 번째 분기를 포트로 노출합니다.
+- `Plan Manufacturing Datasets`
+  - 어떤 데이터셋이 필요한지 계획합니다.
+- `Build Manufacturing Jobs`
+  - dataset key를 실제 retrieval job으로 구체화합니다.
 - `Route Manufacturing Retrieval Plan`
   - 조기 종료, 단일 조회, 다중 조회 분기를 포트로 노출합니다.
 - `Execute Manufacturing Jobs`
@@ -95,12 +116,14 @@ flowchart TD
   - 다중 조회의 overview 응답을 만듭니다.
 - `Run Multi Retrieval Analysis`
   - 다중 조회 병합 및 분석 경로를 실행합니다.
-- `Finish Manufacturing Result`
-  - 최종 state를 정리하고 `result` payload를 노출합니다.
+- `Run Manufacturing Followup`
+  - 현재 `current_data`를 기반으로 follow-up 분석을 수행합니다.
+- `Merge Final Manufacturing Result`
+  - 실제로 살아 있는 branch 결과 하나를 최종 payload로 합칩니다.
 
 ## 로직의 기준점
 
-첫 번째와 두 번째 분기 기준은 여전히 LangGraph 쪽이 정본입니다.
+분기 기준은 여전히 LangGraph 쪽이 정본입니다.
 
 - `manufacturing_agent/graph/builder.py`
   - `route_after_resolve`

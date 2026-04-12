@@ -21,7 +21,8 @@ Use this skill when the task is to make another tool behave like this repository
 
 - `manufacturing_agent/agent.py::run_agent_with_progress`
 - `manufacturing_agent/agent.py::run_agent`
-- `langflow_version/workflow.py::run_langflow_workflow`
+
+If a Langflow-compatible branch flow is needed, preserve the repository's branch-visible node order rather than inventing a sequential wrapper.
 
 ## Non-Negotiables
 

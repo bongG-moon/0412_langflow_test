@@ -8,7 +8,7 @@
 이 프로젝트는 이미 아래 여러 실행 방식이 공존합니다.
 
 - LangGraph 코어 실행
-- Langflow 압축형/분기형 플로우
+- Langflow 분기 가시형 플로우
 - Streamlit UI
 
 여기에 Codex CLI나 다른 도구를 붙이더라도 결과가 같으려면,
@@ -74,7 +74,8 @@ Codex CLI가 이 저장소 맥락에서 그대로 읽게 하는 것입니다.
 권장 엔트리포인트:
 
 - [manufacturing_agent/agent.py](../manufacturing_agent/agent.py)
-- [langflow_version/workflow.py](../langflow_version/workflow.py)
+
+Langflow 쪽은 단일 순차 wrapper를 다시 만드는 대신, 현재 문서화된 분기 가시형 노드 구조를 그대로 따르는 것을 기본 원칙으로 둡니다.
 
 ## 7. 관련 문서
 
