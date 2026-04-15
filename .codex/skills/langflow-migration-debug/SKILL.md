@@ -15,6 +15,7 @@ Use this skill when debugging Langflow-specific failures in this repository.
    - import / project root resolution
    - output type metadata
    - stale stored node code
+   - direct-paste mode vs package-import mode mismatch
    - branch visibility mismatch
    - session persistence mismatch
 3. Inspect the custom node under `custom_components/manufacturing_nodes/`.
@@ -28,6 +29,7 @@ Use this skill when debugging Langflow-specific failures in this repository.
 - outputs are missing `types=["Data"], selected="Data"`
 - old node instances still carry stale code snapshots
 - branch-visible flow is missing merge or session nodes
+- if the user is pasting code directly into Langflow Desktop, package-style imports like `langflow_custom_component.*` will fail unless the whole package exists in the Desktop components path; prefer standalone exported node files for direct-paste mode
 
 ## Rule
 
