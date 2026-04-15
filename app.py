@@ -12,6 +12,7 @@ from manufacturing_agent.app.ui_renderer import (
     render_context,
     render_question_guide,
     render_retry_question_guidance,
+    should_show_retry_question_guidance,
     render_tool_results,
     reset_chat_session,
     reset_filter_session,
@@ -182,9 +183,9 @@ def _render_chat_page() -> None:
             response,
             failure_type=failure_type,
         )
-        should_show_retry = bool(result.get("failure_type")) or any(
-            token in response
-            for token in ["찾을 수 없습니다", "병합", "N:M", "날짜", "실패", "없습니다"]
+        should_show_retry = should_show_retry_question_guidance(
+            response_text=response,
+            failure_type=failure_type,
         )
         if should_show_retry:
             render_retry_question_guidance(

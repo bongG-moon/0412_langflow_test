@@ -227,6 +227,27 @@ def build_retry_question_suggestions(user_input: str, response_text: str, failur
     return _dedupe_questions(suggestions)[:3]
 
 
+def should_show_retry_question_guidance(response_text: str, failure_type: str = "") -> bool:
+    """재질문 가이드는 실제 실패/부족 신호가 있을 때만 보여준다."""
+
+    if failure_type:
+        return True
+
+    normalized_response = normalize_text(response_text)
+    retry_signals = [
+        "찾을 수 없습니다",
+        "다시 질문",
+        "n:m",
+        "병합에 실패",
+        "분석할 현재 테이블이 없습니다",
+        "날짜를 적어",
+        "unknown dataset",
+        "failed",
+        "error",
+    ]
+    return any(signal in normalized_response for signal in map(normalize_text, retry_signals))
+
+
 def render_retry_question_guidance(user_input: str, response_text: str, failure_type: str = "") -> None:
     """실패 시 어떤 식으로 다시 질문하면 좋은지 텍스트로 안내한다."""
 

@@ -17,9 +17,13 @@ class AgentGraphState(TypedDict, total=False):
     chat_history: List[Dict[str, str]]
     context: Dict[str, Any]
     current_data: Dict[str, Any] | None
+    raw_extracted_params: Dict[str, Any]
     extracted_params: Dict[str, Any]
     query_mode: QueryMode
     retrieval_plan: Dict[str, Any]
     retrieval_keys: List[str]
     retrieval_jobs: List[Dict[str, Any]]
+    source_results: List[Dict[str, Any]]
+    current_datasets: Dict[str, Any]
+    source_snapshots: List[Dict[str, Any]]
     result: Dict[str, Any]

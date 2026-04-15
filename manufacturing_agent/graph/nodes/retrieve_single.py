@@ -1,10 +1,12 @@
 """단일 데이터셋 조회를 수행하는 노드."""
 
 from ...graph.state import AgentGraphState
-from ...services.request_context import attach_result_metadata
-from ...services.response_service import generate_response
-from ...services.retrieval_planner import execute_retrieval_jobs
-from ...services.runtime_service import ensure_filtered_result_rows, mark_primary_result, run_analysis_after_retrieval
+from ...services.runtime_service import (
+    build_single_retrieval_response,
+    prepare_retrieval_source_results,
+    route_single_post_processing,
+    run_analysis_after_retrieval,
+)
 
 
 def single_retrieval_node(state: AgentGraphState) -> AgentGraphState:
@@ -16,30 +18,37 @@ def single_retrieval_node(state: AgentGraphState) -> AgentGraphState:
     jobs = state.get("retrieval_jobs", [])
     single_job = jobs[0]
 
-    result = execute_retrieval_jobs([single_job])[0]
-    result = attach_result_metadata(result, single_job["params"], result.get("tool_name", ""))
-    result = ensure_filtered_result_rows(result, single_job["params"])
+    prepared = prepare_retrieval_source_results([single_job], current_data=current_data)
+    source_results = prepared["source_results"]
+    current_datasets = prepared["current_datasets"]
+    source_snapshots = prepared["source_snapshots"]
 
-    if result.get("success"):
+    if route_single_post_processing(
+        user_input=state["user_input"],
+        source_results=source_results,
+        extracted_params=single_job["params"],
+        retrieval_plan=state.get("retrieval_plan"),
+    ) == "post_analysis":
         post_processed = run_analysis_after_retrieval(
             user_input=state["user_input"],
             chat_history=chat_history,
-            source_results=[result],
+            source_results=source_results,
             extracted_params=single_job["params"],
             retrieval_plan=state.get("retrieval_plan"),
+            current_datasets=current_datasets,
+            source_snapshots=source_snapshots,
         )
         if post_processed is not None:
             return {"result": post_processed}
 
-    tool_results = mark_primary_result([result], primary_index=0)
     return {
-        "result": {
-            "response": generate_response(state["user_input"], result, chat_history)
-            if result.get("success")
-            else result.get("error_message", "조회 결과를 처리하지 못했습니다."),
-            "tool_results": tool_results,
-            "current_data": result if result.get("success") else current_data,
-            "extracted_params": single_job["params"] or extracted_params,
-            "awaiting_analysis_choice": bool(result.get("success")),
-        }
+        "result": build_single_retrieval_response(
+            user_input=state["user_input"],
+            chat_history=chat_history,
+            source_results=source_results,
+            current_data=current_data,
+            extracted_params=single_job["params"] or extracted_params,
+            current_datasets=current_datasets,
+            source_snapshots=source_snapshots,
+        )
     }
