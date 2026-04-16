@@ -75,6 +75,7 @@ lf_component_base_DataInput = lf_component_base__load_attr(['lfx.io', 'langflow.
 lf_component_base_MessageInput = lf_component_base__load_attr(['lfx.io', 'langflow.io'], 'MessageInput', lf_component_base__make_input)
 lf_component_base_MessageTextInput = lf_component_base__load_attr(['lfx.io', 'langflow.io'], 'MessageTextInput', lf_component_base__make_input)
 lf_component_base_MultilineInput = lf_component_base__load_attr(['lfx.io', 'langflow.io'], 'MultilineInput', lf_component_base__make_input)
+lf_component_base_SecretStrInput = lf_component_base__load_attr(['lfx.io', 'langflow.io'], 'SecretStrInput', lf_component_base__make_input)
 lf_component_base_Output = lf_component_base__load_attr(['lfx.io', 'langflow.io'], 'Output', lf_component_base__FallbackOutput)
 lf_component_base_Data = lf_component_base__load_attr(['lfx.schema.data', 'lfx.schema', 'langflow.schema'], 'Data', lf_component_base__FallbackData)
 
@@ -404,15 +405,41 @@ def lf_runtime_shared_number_format_format_summary_quantity(value: float | int) 
 
 # ---- visible runtime: _runtime.shared.config ----
 import os as lf_runtime_shared_config_os
+import typing as lf_runtime_shared_config_import_typing
+lf_runtime_shared_config_Any = lf_runtime_shared_config_import_typing.Any
+lf_runtime_shared_config_Dict = lf_runtime_shared_config_import_typing.Dict
 import dotenv as lf_runtime_shared_config_import_dotenv
 lf_runtime_shared_config_load_dotenv = lf_runtime_shared_config_import_dotenv.load_dotenv
 lf_runtime_shared_config_load_dotenv()
 lf_runtime_shared_config_MODEL_TASK_GROUPS = {'fast': {'parameter_extract', 'query_mode_review', 'response_summary'}, 'strong': {'retrieval_plan', 'sufficiency_review', 'analysis_code', 'analysis_retry', 'domain_registry_parse'}}
+lf_runtime_shared_config_ACTIVE_LLM_CONFIG: lf_runtime_shared_config_Dict[str, lf_runtime_shared_config_Any] = {}
+
+def lf_runtime_shared_config__clean_text(value: lf_runtime_shared_config_Any) -> str:
+    if value is None:
+        return ''
+    if hasattr(value, 'get_secret_value'):
+        try:
+            return str(value.get_secret_value() or '').strip()
+        except Exception:
+            return ''
+    return str(value or '').strip()
+
+def lf_runtime_shared_config_set_active_llm_config(config: lf_runtime_shared_config_Dict[str, lf_runtime_shared_config_Any] | None=None) -> None:
+    """Store per-run LLM settings passed through the Langflow state payload."""
+    global lf_runtime_shared_config_ACTIVE_LLM_CONFIG
+    if not isinstance(config, dict):
+        lf_runtime_shared_config_ACTIVE_LLM_CONFIG = {}
+        return
+    lf_runtime_shared_config_ACTIVE_LLM_CONFIG = {'api_key': lf_runtime_shared_config__clean_text(config.get('api_key')), 'fast_model': lf_runtime_shared_config__clean_text(config.get('fast_model')) or 'gemini-flash-latest', 'strong_model': lf_runtime_shared_config__clean_text(config.get('strong_model')) or lf_runtime_shared_config__clean_text(config.get('fast_model')) or 'gemini-flash-latest'}
+
+def lf_runtime_shared_config_get_active_llm_config() -> lf_runtime_shared_config_Dict[str, str]:
+    return {'api_key': lf_runtime_shared_config__clean_text(lf_runtime_shared_config_ACTIVE_LLM_CONFIG.get('api_key')) or lf_runtime_shared_config_os.getenv('LLM_API_KEY', '').strip(), 'fast_model': lf_runtime_shared_config__clean_text(lf_runtime_shared_config_ACTIVE_LLM_CONFIG.get('fast_model')) or lf_runtime_shared_config_os.getenv('LLM_FAST_MODEL', '').strip() or 'gemini-flash-latest', 'strong_model': lf_runtime_shared_config__clean_text(lf_runtime_shared_config_ACTIVE_LLM_CONFIG.get('strong_model')) or lf_runtime_shared_config_os.getenv('LLM_STRONG_MODEL', '').strip() or lf_runtime_shared_config__clean_text(lf_runtime_shared_config_ACTIVE_LLM_CONFIG.get('fast_model')) or lf_runtime_shared_config_os.getenv('LLM_FAST_MODEL', '').strip() or 'gemini-flash-latest'}
 
 def lf_runtime_shared_config__resolve_model_name(task: str) -> str:
     """Return the model name that fits the task."""
-    fast_model = lf_runtime_shared_config_os.getenv('LLM_FAST_MODEL', '').strip() or 'gemini-flash-latest'
-    strong_model = lf_runtime_shared_config_os.getenv('LLM_STRONG_MODEL', '').strip() or fast_model
+    config = lf_runtime_shared_config_get_active_llm_config()
+    fast_model = config['fast_model']
+    strong_model = config['strong_model']
     normalized_task = str(task or '').strip().lower()
     if normalized_task in lf_runtime_shared_config_MODEL_TASK_GROUPS['strong']:
         return strong_model
@@ -420,9 +447,9 @@ def lf_runtime_shared_config__resolve_model_name(task: str) -> str:
 
 def lf_runtime_shared_config_get_llm(task: str='general', temperature: float=0.0):
     """Create an LLM client for one task category."""
-    api_key = lf_runtime_shared_config_os.getenv('LLM_API_KEY', '').strip()
+    api_key = lf_runtime_shared_config_get_active_llm_config()['api_key']
     if not api_key:
-        raise ValueError('LLM_API_KEY environment variable is not set.')
+        raise ValueError('LLM API key is not set. Enter it in the Langflow LLM settings input or Global Variables.')
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
     except Exception as exc:
@@ -1391,9 +1418,11 @@ def lf_node_utils_read_domain_registry_payload(value: lf_node_utils_Any) -> lf_n
     return lf_node_utils_coerce_json_field(registry_payload, {})
 
 def lf_node_utils_activate_domain_context_from_state(state: lf_node_utils_Dict[str, lf_node_utils_Any]) -> None:
-    """Push the current state's domain inputs into the runtime registry layer."""
+    """Push the current state's runtime inputs into the standalone runtime layer."""
     set_active_domain_context = lf_runtime_domain_registry_set_active_domain_context
+    set_active_llm_config = lf_runtime_shared_config_set_active_llm_config
     set_active_domain_context(domain_rules_text=state.get('domain_rules_text', ''), domain_registry_payload=state.get('domain_registry_payload', {}))
+    set_active_llm_config(state.get('llm_config', {}))
 
 # ---- visible runtime: _runtime.services ----
 """그래프 노드와 외부 래퍼가 공통으로 사용하는 서비스 함수 모음."""

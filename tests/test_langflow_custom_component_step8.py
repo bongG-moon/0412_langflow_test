@@ -190,11 +190,17 @@ class LangflowCustomComponentTest(unittest.TestCase):
         session_node.message = FakeMessage(text="테스트 질문", session_id="domain-state")
         session_node.domain_rules = rules_data
         session_node.domain_registry = registry_data
+        session_node.llm_api_key = "test-api-key"
+        session_node.llm_fast_model = "gemini-test-fast"
+        session_node.llm_strong_model = "gemini-test-strong"
         session_node.storage_subdir = self.storage_subdir
 
         state_payload = read_state_payload(session_node.session_state())
         self.assertEqual(state_payload["domain_rules_text"], "DDR5는 제조팀에서 핵심 제품군으로 취급한다.")
         self.assertIn("dataset_keywords", state_payload["domain_registry_payload"])
+        self.assertEqual(state_payload["llm_config"]["api_key"], "test-api-key")
+        self.assertEqual(state_payload["llm_config"]["fast_model"], "gemini-test-fast")
+        self.assertEqual(state_payload["llm_config"]["strong_model"], "gemini-test-strong")
 
     def test_multi_retrieval_analysis_flow_runs_through_components(self):
         with self._enter_runtime_patches():

@@ -75,6 +75,7 @@ lf_component_base_DataInput = lf_component_base__load_attr(['lfx.io', 'langflow.
 lf_component_base_MessageInput = lf_component_base__load_attr(['lfx.io', 'langflow.io'], 'MessageInput', lf_component_base__make_input)
 lf_component_base_MessageTextInput = lf_component_base__load_attr(['lfx.io', 'langflow.io'], 'MessageTextInput', lf_component_base__make_input)
 lf_component_base_MultilineInput = lf_component_base__load_attr(['lfx.io', 'langflow.io'], 'MultilineInput', lf_component_base__make_input)
+lf_component_base_SecretStrInput = lf_component_base__load_attr(['lfx.io', 'langflow.io'], 'SecretStrInput', lf_component_base__make_input)
 lf_component_base_Output = lf_component_base__load_attr(['lfx.io', 'langflow.io'], 'Output', lf_component_base__FallbackOutput)
 lf_component_base_Data = lf_component_base__load_attr(['lfx.schema.data', 'lfx.schema', 'langflow.schema'], 'Data', lf_component_base__FallbackData)
 
@@ -139,9 +140,9 @@ def lf_workflow__coerce_json_field(value: lf_workflow_Any, default: lf_workflow_
     except Exception:
         return default
 
-def lf_workflow_build_initial_state(user_input: str, chat_history: lf_workflow_List[lf_workflow_Dict[str, str]] | str | None=None, context: lf_workflow_Dict[str, lf_workflow_Any] | str | None=None, current_data: lf_workflow_Dict[str, lf_workflow_Any] | str | None=None, domain_rules_text: str | None=None, domain_registry_payload: lf_workflow_Dict[str, lf_workflow_Any] | lf_workflow_List[lf_workflow_Any] | str | None=None) -> lf_workflow_Dict[str, lf_workflow_Any]:
+def lf_workflow_build_initial_state(user_input: str, chat_history: lf_workflow_List[lf_workflow_Dict[str, str]] | str | None=None, context: lf_workflow_Dict[str, lf_workflow_Any] | str | None=None, current_data: lf_workflow_Dict[str, lf_workflow_Any] | str | None=None, domain_rules_text: str | None=None, domain_registry_payload: lf_workflow_Dict[str, lf_workflow_Any] | lf_workflow_List[lf_workflow_Any] | str | None=None, llm_config: lf_workflow_Dict[str, lf_workflow_Any] | str | None=None) -> lf_workflow_Dict[str, lf_workflow_Any]:
     """Build the shared state contract used across standalone Langflow nodes."""
-    return {'user_input': str(user_input or ''), 'chat_history': lf_workflow__coerce_json_field(chat_history, []), 'context': lf_workflow__coerce_json_field(context, {}), 'current_data': lf_workflow__coerce_json_field(current_data, None), 'domain_rules_text': str(domain_rules_text or '').strip(), 'domain_registry_payload': lf_workflow__coerce_json_field(domain_registry_payload, {})}
+    return {'user_input': str(user_input or ''), 'chat_history': lf_workflow__coerce_json_field(chat_history, []), 'context': lf_workflow__coerce_json_field(context, {}), 'current_data': lf_workflow__coerce_json_field(current_data, None), 'domain_rules_text': str(domain_rules_text or '').strip(), 'domain_registry_payload': lf_workflow__coerce_json_field(domain_registry_payload, {}), 'llm_config': lf_workflow__coerce_json_field(llm_config, {})}
 
 # ---- node component ----
 import json
@@ -154,6 +155,7 @@ Component = lf_component_base_Component
 DataInput = lf_component_base_DataInput
 MessageInput = lf_component_base_MessageInput
 MessageTextInput = lf_component_base_MessageTextInput
+SecretStrInput = lf_component_base_SecretStrInput
 Output = lf_component_base_Output
 make_data = lf_component_base_make_data
 read_data_payload = lf_component_base_read_data_payload
@@ -204,6 +206,17 @@ def read_domain_registry_payload(value: Any) -> Dict[str, Any] | List[Any]:
     return _coerce_json_field(registry_payload, {})
 
 
+def _secret_to_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if hasattr(value, "get_secret_value"):
+        try:
+            return str(value.get_secret_value() or "").strip()
+        except Exception:
+            return ""
+    return str(value or "").strip()
+
+
 def _coerce_dict(value: Any) -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
@@ -234,6 +247,26 @@ class SessionMemoryComponent(Component):
         DataInput(name="domain_rules", display_name="Domain Rules", info="Optional free-text domain rules payload"),
         DataInput(name="domain_registry", display_name="Domain Registry", info="Optional registry JSON payload"),
         DataInput(name="result", display_name="Result", info="Merged final result payload to save back into the session"),
+        SecretStrInput(
+            name="llm_api_key",
+            display_name="LLM API Key",
+            info="Gemini API key. You can bind this to a Langflow Global Variable.",
+            advanced=True,
+        ),
+        MessageTextInput(
+            name="llm_fast_model",
+            display_name="Fast Model",
+            value="gemini-flash-latest",
+            info="Model used for extraction, routing, and response summaries.",
+            advanced=True,
+        ),
+        MessageTextInput(
+            name="llm_strong_model",
+            display_name="Strong Model",
+            value="gemini-flash-latest",
+            info="Model used for retrieval planning and pandas analysis code generation.",
+            advanced=True,
+        ),
         MessageTextInput(name="session_id_override", display_name="Session ID", info="Optional fixed session id.", advanced=True),
         MessageTextInput(name="storage_subdir", display_name="Storage Subdir", value=".langflow_session_store", info="Folder used to persist session JSON files.", advanced=True),
     ]
@@ -265,6 +298,16 @@ class SessionMemoryComponent(Component):
         storage_dir = (base_dir / subdir).resolve()
         storage_dir.mkdir(parents=True, exist_ok=True)
         return storage_dir / f"{safe_session_id}.json"
+
+    def _llm_config(self) -> Dict[str, str]:
+        fast_model = str(getattr(self, "llm_fast_model", "") or "gemini-flash-latest").strip()
+        strong_model = str(getattr(self, "llm_strong_model", "") or fast_model).strip()
+        api_key = _secret_to_text(getattr(self, "llm_api_key", None))
+        return {
+            "api_key": api_key,
+            "fast_model": fast_model or "gemini-flash-latest",
+            "strong_model": strong_model or fast_model or "gemini-flash-latest",
+        }
 
     def _load_snapshot(self) -> Dict[str, Any]:
         session_file = self._session_file()
@@ -321,6 +364,7 @@ class SessionMemoryComponent(Component):
             current_data=snapshot.get("current_data"),
             domain_rules_text=domain_rules_text,
             domain_registry_payload=domain_registry_payload,
+            llm_config=self._llm_config(),
         )
         state["session_id"] = snapshot.get("session_id", self._resolve_session_id())
         self.status = f"Session loaded: {state.get('session_id', 'default')}"

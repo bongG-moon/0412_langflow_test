@@ -75,12 +75,13 @@ def read_domain_registry_payload(value: Any) -> Dict[str, Any] | List[Any]:
 
 
 def activate_domain_context_from_state(state: Dict[str, Any]) -> None:
-    """Push the current state's domain inputs into the runtime registry layer."""
+    """Push the current state's runtime inputs into the standalone runtime layer."""
 
     from langflow_custom_component._runtime.domain.registry import set_active_domain_context
+    from langflow_custom_component._runtime.shared.config import set_active_llm_config
 
     set_active_domain_context(
         domain_rules_text=state.get("domain_rules_text", ""),
         domain_registry_payload=state.get("domain_registry_payload", {}),
     )
-
+    set_active_llm_config(state.get("llm_config", {}))

@@ -26,6 +26,7 @@ def build_initial_state(
     current_data: Dict[str, Any] | str | None = None,
     domain_rules_text: str | None = None,
     domain_registry_payload: Dict[str, Any] | List[Any] | str | None = None,
+    llm_config: Dict[str, Any] | str | None = None,
 ) -> Dict[str, Any]:
     """Build the shared state contract used across standalone Langflow nodes."""
 
@@ -36,5 +37,5 @@ def build_initial_state(
         "current_data": _coerce_json_field(current_data, None),
         "domain_rules_text": str(domain_rules_text or "").strip(),
         "domain_registry_payload": _coerce_json_field(domain_registry_payload, {}),
+        "llm_config": _coerce_json_field(llm_config, {}),
     }
-

@@ -82,6 +82,7 @@ DataInput = _load_attr(["lfx.io", "langflow.io"], "DataInput", _make_input)
 MessageInput = _load_attr(["lfx.io", "langflow.io"], "MessageInput", _make_input)
 MessageTextInput = _load_attr(["lfx.io", "langflow.io"], "MessageTextInput", _make_input)
 MultilineInput = _load_attr(["lfx.io", "langflow.io"], "MultilineInput", _make_input)
+SecretStrInput = _load_attr(["lfx.io", "langflow.io"], "SecretStrInput", _make_input)
 Output = _load_attr(["lfx.io", "langflow.io"], "Output", _FallbackOutput)
 Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", _FallbackData)
 

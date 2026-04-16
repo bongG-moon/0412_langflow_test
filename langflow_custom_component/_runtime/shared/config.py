@@ -1,4 +1,5 @@
 import os
+from typing import Any, Dict
 
 from dotenv import load_dotenv
 
@@ -25,12 +26,55 @@ MODEL_TASK_GROUPS = {
     },
 }
 
+ACTIVE_LLM_CONFIG: Dict[str, Any] = {}
+
+
+def _clean_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if hasattr(value, "get_secret_value"):
+        try:
+            return str(value.get_secret_value() or "").strip()
+        except Exception:
+            return ""
+    return str(value or "").strip()
+
+
+def set_active_llm_config(config: Dict[str, Any] | None = None) -> None:
+    """Store per-run LLM settings passed through the Langflow state payload."""
+
+    global ACTIVE_LLM_CONFIG
+    if not isinstance(config, dict):
+        ACTIVE_LLM_CONFIG = {}
+        return
+
+    ACTIVE_LLM_CONFIG = {
+        "api_key": _clean_text(config.get("api_key")),
+        "fast_model": _clean_text(config.get("fast_model")) or "gemini-flash-latest",
+        "strong_model": _clean_text(config.get("strong_model")) or _clean_text(config.get("fast_model")) or "gemini-flash-latest",
+    }
+
+
+def get_active_llm_config() -> Dict[str, str]:
+    return {
+        "api_key": _clean_text(ACTIVE_LLM_CONFIG.get("api_key")) or os.getenv("LLM_API_KEY", "").strip(),
+        "fast_model": _clean_text(ACTIVE_LLM_CONFIG.get("fast_model"))
+        or os.getenv("LLM_FAST_MODEL", "").strip()
+        or "gemini-flash-latest",
+        "strong_model": _clean_text(ACTIVE_LLM_CONFIG.get("strong_model"))
+        or os.getenv("LLM_STRONG_MODEL", "").strip()
+        or _clean_text(ACTIVE_LLM_CONFIG.get("fast_model"))
+        or os.getenv("LLM_FAST_MODEL", "").strip()
+        or "gemini-flash-latest",
+    }
+
 
 def _resolve_model_name(task: str) -> str:
     """Return the model name that fits the task."""
 
-    fast_model = os.getenv("LLM_FAST_MODEL", "").strip() or "gemini-flash-latest"
-    strong_model = os.getenv("LLM_STRONG_MODEL", "").strip() or fast_model
+    config = get_active_llm_config()
+    fast_model = config["fast_model"]
+    strong_model = config["strong_model"]
     normalized_task = str(task or "").strip().lower()
 
     if normalized_task in MODEL_TASK_GROUPS["strong"]:
@@ -41,9 +85,9 @@ def _resolve_model_name(task: str) -> str:
 def get_llm(task: str = "general", temperature: float = 0.0):
     """Create an LLM client for one task category."""
 
-    api_key = os.getenv("LLM_API_KEY", "").strip()
+    api_key = get_active_llm_config()["api_key"]
     if not api_key:
-        raise ValueError("LLM_API_KEY environment variable is not set.")
+        raise ValueError("LLM API key is not set. Enter it in the Langflow LLM settings input or Global Variables.")
 
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
