@@ -8,7 +8,60 @@ plain local Python environment where the full Langflow runtime may be missing.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import import_module
 from typing import Any, Dict
+
+
+def _load_attr(module_names: list[str], attr_name: str, fallback: Any) -> Any:
+    """Load a Langflow class while keeping direct-paste validation friendly."""
+
+    for module_name in module_names:
+        try:
+            return getattr(import_module(module_name), attr_name)
+        except Exception:
+            continue
+    return fallback
+
+
+class _FallbackComponent:
+    display_name = ""
+    description = ""
+    documentation = ""
+    icon = ""
+    name = ""
+    inputs = []
+    outputs = []
+    status = ""
+
+
+@dataclass
+class _Input:
+    name: str
+    display_name: str
+    info: str = ""
+    value: Any = None
+    tool_mode: bool = False
+    advanced: bool = False
+
+
+@dataclass
+class _FallbackOutput:
+    name: str
+    display_name: str
+    method: str
+    group_outputs: bool = False
+    types: list[str] | None = None
+    selected: str | None = None
+
+
+class _FallbackData:  # pragma: no cover - only used without Langflow
+    def __init__(self, data: Dict[str, Any] | None = None, text: str | None = None):
+        self.data = data or {}
+        self.text = text
+
+
+def _make_input(**kwargs):
+    return _Input(**kwargs)
 
 
 def _build_simple_data(payload: Dict[str, Any], text: str | None = None):
@@ -20,60 +73,17 @@ def _build_simple_data(payload: Dict[str, Any], text: str | None = None):
     return SimpleData(data=payload, text=text)
 
 
-try:  # Langflow 1.7+ style
-    from lfx.custom.custom_component.component import Component
-    from lfx.io import DataInput, MessageInput, MessageTextInput, MultilineInput, Output
-    from lfx.schema import Data
-except Exception:  # pragma: no cover - fallback branch depends on environment
-    try:  # Older compatible import path
-        from langflow.custom import Component
-        from langflow.io import DataInput, MessageInput, MessageTextInput, MultilineInput, Output
-        from langflow.schema import Data
-    except Exception:  # Local test fallback
-        class Component:
-            display_name = ""
-            description = ""
-            documentation = ""
-            icon = ""
-            name = ""
-            inputs = []
-            outputs = []
-            status = ""
-
-        @dataclass
-        class _Input:
-            name: str
-            display_name: str
-            info: str = ""
-            value: Any = None
-            tool_mode: bool = False
-            advanced: bool = False
-
-        @dataclass
-        class Output:
-            name: str
-            display_name: str
-            method: str
-            group_outputs: bool = False
-            types: list[str] | None = None
-            selected: str | None = None
-
-        def MessageTextInput(**kwargs):
-            return _Input(**kwargs)
-
-        def MultilineInput(**kwargs):
-            return _Input(**kwargs)
-
-        def DataInput(**kwargs):
-            return _Input(**kwargs)
-
-        def MessageInput(**kwargs):
-            return _Input(**kwargs)
-
-        class Data:  # pragma: no cover - only used without Langflow
-            def __init__(self, data: Dict[str, Any] | None = None, text: str | None = None):
-                self.data = data or {}
-                self.text = text
+Component = _load_attr(
+    ["lfx.custom.custom_component.component", "lfx.custom", "langflow.custom"],
+    "Component",
+    _FallbackComponent,
+)
+DataInput = _load_attr(["lfx.io", "langflow.io"], "DataInput", _make_input)
+MessageInput = _load_attr(["lfx.io", "langflow.io"], "MessageInput", _make_input)
+MessageTextInput = _load_attr(["lfx.io", "langflow.io"], "MessageTextInput", _make_input)
+MultilineInput = _load_attr(["lfx.io", "langflow.io"], "MultilineInput", _make_input)
+Output = _load_attr(["lfx.io", "langflow.io"], "Output", _FallbackOutput)
+Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", _FallbackData)
 
 
 def make_data(payload: Dict[str, Any], text: str | None = None):
@@ -126,4 +136,3 @@ def read_state_payload(value: Any) -> Dict[str, Any]:
     if isinstance(state, dict):
         return state
     return payload if isinstance(payload, dict) else {}
-

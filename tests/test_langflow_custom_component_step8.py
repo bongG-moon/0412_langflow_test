@@ -151,21 +151,21 @@ class LangflowCustomComponentTest(unittest.TestCase):
         patches = []
         for module in self.flat_runtime_modules:
             for attr_name in [
-                "__lf_runtime_services_parameter_service__get_llm_for_task",
-                "__lf_runtime_services_retrieval_planner__get_llm_for_task",
-                "__lf_runtime_services_request_context__get_llm_for_task",
+                "lf_runtime_services_parameter_service_get_llm_for_task",
+                "lf_runtime_services_retrieval_planner_get_llm_for_task",
+                "lf_runtime_services_request_context_get_llm_for_task",
             ]:
                 if hasattr(module, attr_name):
                     patches.append(patch.object(module, attr_name, side_effect=fake_get_llm_for_task))
 
-            if hasattr(module, "__lf_runtime_analysis_engine__build_llm_plan"):
-                patches.append(patch.object(module, "__lf_runtime_analysis_engine__build_llm_plan", return_value=(None, "llm_failed")))
+            if hasattr(module, "lf_runtime_analysis_engine_build_llm_plan"):
+                patches.append(patch.object(module, "lf_runtime_analysis_engine_build_llm_plan", return_value=(None, "llm_failed")))
 
-            if hasattr(module, "__lf_runtime_services_runtime_service__generate_response"):
+            if hasattr(module, "lf_runtime_services_runtime_service_generate_response"):
                 patches.append(
                     patch.object(
                         module,
-                        "__lf_runtime_services_runtime_service__generate_response",
+                        "lf_runtime_services_runtime_service_generate_response",
                         side_effect=lambda user_input, result, chat_history: f"{result.get('summary', '')} | {user_input}",
                     )
                 )

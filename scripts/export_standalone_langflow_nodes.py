@@ -32,11 +32,22 @@ RUNTIME_ATTR_RE = re.compile(r"^(?P<target>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<var
 def _prefix_for_module(module_name: str) -> str:
     relative_name = module_name.removeprefix(RUNTIME_PACKAGE).strip(".") or "root"
     safe_name = re.sub(r"[^0-9A-Za-z_]", "_", relative_name).strip("_")
+    return f"lf_{safe_name}_"
+
+
+def _legacy_prefix_for_module(module_name: str) -> str:
+    relative_name = module_name.removeprefix(RUNTIME_PACKAGE).strip(".") or "root"
+    safe_name = re.sub(r"[^0-9A-Za-z_]", "_", relative_name).strip("_")
     return f"__lf_{safe_name}__"
 
 
 def _prefixed_name(module_name: str, name: str) -> str:
     return f"{_prefix_for_module(module_name)}{name}"
+
+
+def _external_import_alias(module_name: str, imported_module: str) -> str:
+    safe_module = re.sub(r"[^0-9A-Za-z_]", "_", imported_module).strip("_")
+    return _prefixed_name(module_name, f"import_{safe_module}")
 
 
 def _is_internal_module(module_name: str | None, sources: Dict[str, str]) -> bool:
@@ -206,12 +217,29 @@ class _VisibleRuntimeTransformer(ast.NodeTransformer):
 
         imported_module = _resolve_import_module(self.module_name, node.level, node.module)
         if not _is_internal_module(imported_module, self.sources):
-            if self.scope_depth == 0:
-                for alias in node.names:
-                    local_name = alias.asname or alias.name
-                    if local_name in self.top_level_names:
-                        alias.asname = _prefixed_name(self.module_name, local_name)
-            return node
+            if self.scope_depth != 0 or not imported_module:
+                return node
+
+            module_alias = _external_import_alias(self.module_name, imported_module)
+            replacements: List[ast.stmt] = [
+                ast.Import(names=[ast.alias(name=imported_module, asname=module_alias)])
+            ]
+            for alias in node.names:
+                if alias.name == "*":
+                    return node
+                local_name = alias.asname or alias.name
+                target_name = self._rename_if_module_level_name(local_name)
+                replacements.append(
+                    ast.Assign(
+                        targets=[ast.Name(id=target_name, ctx=ast.Store())],
+                        value=ast.Attribute(
+                            value=ast.Name(id=module_alias, ctx=ast.Load()),
+                            attr=alias.name,
+                            ctx=ast.Load(),
+                        ),
+                    )
+                )
+            return replacements
 
         replacements: List[ast.stmt] = []
         for alias in node.names:
@@ -247,7 +275,7 @@ def _direct_node_dependencies(logic_source: str, sources: Dict[str, str]) -> Set
         if match:
             dependencies.add(match.group("module"))
     for module_name in sources:
-        if _prefix_for_module(module_name) in logic_source:
+        if _prefix_for_module(module_name) in logic_source or _legacy_prefix_for_module(module_name) in logic_source:
             dependencies.add(module_name)
     return dependencies
 
@@ -289,8 +317,11 @@ def _extract_node_logic(module_name: str) -> str:
 def _replace_node_runtime_bindings(logic_source: str) -> str:
     runtime_vars: Dict[str, str] = {}
     rewritten_lines: List[str] = []
+    rewritten_source = logic_source
+    for module_name in RUNTIME_ORDER:
+        rewritten_source = rewritten_source.replace(_legacy_prefix_for_module(module_name), _prefix_for_module(module_name))
 
-    for line in logic_source.splitlines():
+    for line in rewritten_source.splitlines():
         stripped = line.strip()
         binding_match = RUNTIME_BINDING_RE.match(stripped)
         if binding_match:
