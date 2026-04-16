@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 from unittest.mock import patch
 
 from manufacturing_agent.services.parameter_service import (
@@ -55,8 +56,9 @@ class QueryModeStep1Tests(unittest.TestCase):
         self.assertIsNone(adjusted_params.get("product_name"))
 
     def test_raw_params_do_not_inherit_old_product_filter(self):
+        today = datetime.now().strftime("%Y%m%d")
         context = {
-            "date": "20260415",
+            "date": today,
             "process_name": ["D/A1", "D/A2", "D/A3", "D/A4", "D/A5", "D/A6"],
             "product_name": "DDR5",
         }
@@ -69,7 +71,7 @@ class QueryModeStep1Tests(unittest.TestCase):
                 inherit_context=False,
             )
 
-        self.assertEqual(params.get("date"), "20260415")
+        self.assertEqual(params.get("date"), today)
         self.assertEqual(
             params.get("process_name"),
             ["W/B1", "W/B2", "W/B3", "W/B4", "W/B5", "W/B6"],

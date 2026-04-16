@@ -70,7 +70,11 @@ class LangflowImportJsonStep9Tests(unittest.TestCase):
             self.assertTrue(code, display_name)
             if display_name in {"Chat Input", "Chat Output"}:
                 continue
-            self.assertIn("_bootstrap_runtime()", code, display_name)
+            self.assertIn("# VISIBLE_STANDALONE_RUNTIME", code, display_name)
+            self.assertNotIn("_RUNTIME_SOURCES", code, display_name)
+            self.assertNotIn("_RUNTIME_ORDER", code, display_name)
+            self.assertNotIn("_PACKAGE_NAMES", code, display_name)
+            self.assertNotIn("_bootstrap_runtime", code, display_name)
             self.assertNotIn("langflow_custom_component", code, display_name)
             compile(code, f"<{display_name}>", "exec")
 

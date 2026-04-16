@@ -38,11 +38,14 @@ class LangflowPasteReadyStep10Tests(unittest.TestCase):
         for filename in sorted(NODE_FILES):
             path = COMPONENT_DIR / filename
             text = path.read_text(encoding="utf-8")
-            self.assertIn("_bootstrap_runtime()", text, path.name)
+            self.assertIn("# VISIBLE_STANDALONE_RUNTIME", text, path.name)
+            self.assertNotIn("_RUNTIME_SOURCES", text, path.name)
+            self.assertNotIn("_RUNTIME_ORDER", text, path.name)
+            self.assertNotIn("_PACKAGE_NAMES", text, path.name)
+            self.assertNotIn("_bootstrap_runtime", text, path.name)
             self.assertNotIn("langflow_custom_component", text, path.name)
-            node_body = text.rsplit("_bootstrap_runtime()", 1)[-1]
-            self.assertNotIn("from manufacturing_langflow_runtime", node_body, path.name)
-            self.assertNotIn("import manufacturing_langflow_runtime", node_body, path.name)
+            self.assertNotIn("from manufacturing_langflow_runtime", text, path.name)
+            self.assertNotIn("import manufacturing_langflow_runtime", text, path.name)
             compile(text, str(path), "exec")
 
     def test_representative_root_nodes_import_successfully(self):
@@ -51,9 +54,13 @@ class LangflowPasteReadyStep10Tests(unittest.TestCase):
             spec = importlib.util.spec_from_file_location(f"standalone_{path.stem}", path)
             module = importlib.util.module_from_spec(spec)
             self.assertIsNotNone(spec.loader, filename)
-            spec.loader.exec_module(module)
+            sys.modules[spec.name] = module
+            try:
+                spec.loader.exec_module(module)
+            finally:
+                sys.modules.pop(spec.name, None)
 
-    def test_import_recovers_from_partial_runtime_state(self):
+    def test_import_ignores_stale_runtime_state(self):
         runtime_prefix = "manufacturing_langflow_runtime"
         stale_names = [name for name in list(sys.modules) if name == runtime_prefix or name.startswith(f"{runtime_prefix}.")]
         original_modules = {name: sys.modules[name] for name in stale_names}
@@ -69,8 +76,12 @@ class LangflowPasteReadyStep10Tests(unittest.TestCase):
             spec = importlib.util.spec_from_file_location("standalone_domain_rules_partial", path)
             module = importlib.util.module_from_spec(spec)
             self.assertIsNotNone(spec.loader, path.name)
-            spec.loader.exec_module(module)
-            self.assertIn("manufacturing_langflow_runtime.component_base", sys.modules)
+            sys.modules[spec.name] = module
+            try:
+                spec.loader.exec_module(module)
+            finally:
+                sys.modules.pop(spec.name, None)
+            self.assertNotIn("manufacturing_langflow_runtime.component_base", sys.modules)
         finally:
             for name in [name for name in list(sys.modules) if name == runtime_prefix or name.startswith(f"{runtime_prefix}.")]:
                 sys.modules.pop(name, None)

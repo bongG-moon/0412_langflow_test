@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 COMPONENT_DIR = ROOT / "langflow_custom_component"
 OUTPUT_PATH = COMPONENT_DIR / "manufacturing_langflow_import.json"
 RUNTIME_PACKAGE = "manufacturing_langflow_runtime"
+VISIBLE_STANDALONE_MARKER = "# VISIBLE_STANDALONE_RUNTIME"
 STARTER_URL = (
     "https://raw.githubusercontent.com/langflow-ai/langflow/main/"
     "src/backend/base/langflow/initial_setup/starter_projects/Basic%20Prompting.json"
@@ -283,7 +284,7 @@ def _bootstrap_prefix(runtime_sources: Dict[str, str]) -> str:
 
 
 def _is_standalone_node_source(source: str) -> bool:
-    return "_bootstrap_runtime()" in source and RUNTIME_PACKAGE in source
+    return VISIBLE_STANDALONE_MARKER in source or ("_bootstrap_runtime()" in source and RUNTIME_PACKAGE in source)
 
 
 def _compose_node_code(module_name: str, runtime_sources: Dict[str, str]) -> str:
@@ -298,8 +299,14 @@ def _component_class(module_name: str):
     module = importlib.import_module(f"langflow_custom_component.{module_name}")
     classes = []
     for name in dir(module):
+        if name.startswith("__lf_"):
+            continue
         obj = getattr(module, name)
-        if inspect.isclass(obj) and getattr(obj, "__module__", "") == module.__name__ and hasattr(obj, "display_name"):
+        if (
+            inspect.isclass(obj)
+            and getattr(obj, "__module__", "") == module.__name__
+            and bool(str(getattr(obj, "display_name", "")).strip())
+        ):
             classes.append(obj)
     if not classes:
         raise RuntimeError(f"No component class found in {module_name}.")

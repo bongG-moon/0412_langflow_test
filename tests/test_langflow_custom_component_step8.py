@@ -3,9 +3,18 @@ import shutil
 import unittest
 from contextlib import ExitStack
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
+import langflow_custom_component.analyze_multi as analyze_multi_module
+import langflow_custom_component.analyze_single as analyze_single_module
+import langflow_custom_component.build_multi as build_multi_module
+import langflow_custom_component.build_single as build_single_module
+import langflow_custom_component.decide_mode as decide_mode_module
+import langflow_custom_component.extract_params as extract_params_module
+import langflow_custom_component.plan_datasets as plan_datasets_module
+import langflow_custom_component.run_followup as run_followup_module
 from langflow_custom_component.component_base import read_data_payload, read_state_payload
 from langflow_custom_component.domain_registry import DomainRegistryComponent
 from langflow_custom_component.domain_rules import DomainRulesComponent
@@ -41,9 +50,10 @@ class FakeLLM:
     def invoke(self, messages):
         prompt = "\n".join(str(getattr(message, "content", message)) for message in messages)
         if self.task == "parameter_extract":
+            today = datetime.now().strftime("%Y%m%d")
             if "DDR5제품의 생산 달성율" in prompt:
                 payload = {
-                    "date": "20260415",
+                    "date": today,
                     "process": ["DA"],
                     "oper_num": None,
                     "pkg_type1": None,
@@ -75,7 +85,7 @@ class FakeLLM:
                 }
             else:
                 payload = {
-                    "date": "20260415",
+                    "date": today,
                     "process": None,
                     "oper_num": None,
                     "pkg_type1": None,
@@ -120,22 +130,45 @@ def fake_get_llm_for_task(task: str, temperature: float = 0.0):
 
 class LangflowCustomComponentTest(unittest.TestCase):
     storage_subdir = ".langflow_test_store"
-    runtime_prefix = "manufacturing_langflow_runtime._runtime"
+    flat_runtime_modules = [
+        extract_params_module,
+        decide_mode_module,
+        plan_datasets_module,
+        build_single_module,
+        analyze_single_module,
+        build_multi_module,
+        analyze_multi_module,
+        run_followup_module,
+    ]
+
+    def setUp(self):
+        shutil.rmtree(Path.cwd() / self.storage_subdir, ignore_errors=True)
 
     def tearDown(self):
         shutil.rmtree(Path.cwd() / self.storage_subdir, ignore_errors=True)
 
     def _patch_runtime(self):
-        patches = [
-            patch(f"{self.runtime_prefix}.services.parameter_service.get_llm_for_task", side_effect=fake_get_llm_for_task),
-            patch(f"{self.runtime_prefix}.services.retrieval_planner.get_llm_for_task", side_effect=fake_get_llm_for_task),
-            patch(f"{self.runtime_prefix}.services.request_context.get_llm_for_task", side_effect=fake_get_llm_for_task),
-            patch(f"{self.runtime_prefix}.analysis.engine.build_llm_plan", return_value=(None, "llm_failed")),
-            patch(
-                f"{self.runtime_prefix}.services.runtime_service.generate_response",
-                side_effect=lambda user_input, result, chat_history: f"{result.get('summary', '')} | {user_input}",
-            ),
-        ]
+        patches = []
+        for module in self.flat_runtime_modules:
+            for attr_name in [
+                "__lf_runtime_services_parameter_service__get_llm_for_task",
+                "__lf_runtime_services_retrieval_planner__get_llm_for_task",
+                "__lf_runtime_services_request_context__get_llm_for_task",
+            ]:
+                if hasattr(module, attr_name):
+                    patches.append(patch.object(module, attr_name, side_effect=fake_get_llm_for_task))
+
+            if hasattr(module, "__lf_runtime_analysis_engine__build_llm_plan"):
+                patches.append(patch.object(module, "__lf_runtime_analysis_engine__build_llm_plan", return_value=(None, "llm_failed")))
+
+            if hasattr(module, "__lf_runtime_services_runtime_service__generate_response"):
+                patches.append(
+                    patch.object(
+                        module,
+                        "__lf_runtime_services_runtime_service__generate_response",
+                        side_effect=lambda user_input, result, chat_history: f"{result.get('summary', '')} | {user_input}",
+                    )
+                )
         return patches
 
     def _enter_runtime_patches(self):
