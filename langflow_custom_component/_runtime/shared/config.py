@@ -41,7 +41,7 @@ def _clean_text(value: Any) -> str:
 
 
 def set_active_llm_config(config: Dict[str, Any] | None = None) -> None:
-    """Store per-run LLM settings passed through the Langflow state payload."""
+    """Store per-node LLM settings entered in the Langflow component UI."""
 
     global ACTIVE_LLM_CONFIG
     if not isinstance(config, dict):

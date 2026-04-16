@@ -190,17 +190,49 @@ class LangflowCustomComponentTest(unittest.TestCase):
         session_node.message = FakeMessage(text="테스트 질문", session_id="domain-state")
         session_node.domain_rules = rules_data
         session_node.domain_registry = registry_data
-        session_node.llm_api_key = "test-api-key"
-        session_node.llm_fast_model = "gemini-test-fast"
-        session_node.llm_strong_model = "gemini-test-strong"
         session_node.storage_subdir = self.storage_subdir
 
         state_payload = read_state_payload(session_node.session_state())
         self.assertEqual(state_payload["domain_rules_text"], "DDR5는 제조팀에서 핵심 제품군으로 취급한다.")
         self.assertIn("dataset_keywords", state_payload["domain_registry_payload"])
-        self.assertEqual(state_payload["llm_config"]["api_key"], "test-api-key")
-        self.assertEqual(state_payload["llm_config"]["fast_model"], "gemini-test-fast")
-        self.assertEqual(state_payload["llm_config"]["strong_model"], "gemini-test-strong")
+        self.assertNotIn("llm_config", state_payload)
+
+    def test_llm_settings_are_inputs_on_model_calling_nodes(self):
+        session_input_names = {getattr(input_field, "name", "") for input_field in SessionMemoryComponent.inputs}
+        self.assertNotIn("llm_api_key", session_input_names)
+        self.assertNotIn("llm_fast_model", session_input_names)
+        self.assertNotIn("llm_strong_model", session_input_names)
+
+        model_calling_components = [
+            ExtractParamsComponent,
+            DecideModeComponent,
+            PlanDatasetsComponent,
+            build_single_module.BuildSingleComponent,
+            analyze_single_module.AnalyzeSingleComponent,
+            build_multi_module.BuildMultiComponent,
+            AnalyzeMultiComponent,
+            RunFollowupComponent,
+        ]
+        for component_cls in model_calling_components:
+            input_names = {getattr(input_field, "name", "") for input_field in component_cls.inputs}
+            self.assertIn("llm_api_key", input_names)
+            self.assertIn("llm_fast_model", input_names)
+            self.assertIn("llm_strong_model", input_names)
+
+    def test_llm_settings_import_template_uses_text_inputs(self):
+        flow = json.loads(Path("langflow_custom_component/manufacturing_langflow_import.json").read_text(encoding="utf-8"))
+        llm_template = None
+        for node in flow["data"]["nodes"]:
+            template = node.get("data", {}).get("node", {}).get("template", {})
+            if "llm_api_key" in template:
+                llm_template = template
+                break
+
+        self.assertIsNotNone(llm_template)
+        self.assertEqual(llm_template["llm_api_key"]["_input_type"], "SecretStrInput")
+        self.assertTrue(llm_template["llm_api_key"]["password"])
+        self.assertEqual(llm_template["llm_fast_model"]["_input_type"], "MessageTextInput")
+        self.assertEqual(llm_template["llm_strong_model"]["_input_type"], "MessageTextInput")
 
     def test_multi_retrieval_analysis_flow_runs_through_components(self):
         with self._enter_runtime_patches():

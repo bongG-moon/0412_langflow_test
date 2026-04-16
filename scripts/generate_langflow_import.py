@@ -114,6 +114,7 @@ PACKAGE_BLOCK_RE = re.compile(
 RUNTIME_ORDER = [
     RUNTIME_PACKAGE,
     f"{RUNTIME_PACKAGE}.component_base",
+    f"{RUNTIME_PACKAGE}.llm_settings",
     f"{RUNTIME_PACKAGE}.workflow",
     f"{RUNTIME_PACKAGE}._runtime",
     f"{RUNTIME_PACKAGE}._runtime.shared",
@@ -327,6 +328,10 @@ def _make_node_id(base: str, key: str) -> str:
 
 
 def _input_kind(module_name: str, input_name: str) -> str:
+    if input_name == "llm_api_key":
+        return "secret"
+    if input_name in {"llm_fast_model", "llm_strong_model"}:
+        return "text"
     if module_name == "domain_rules" and input_name == "domain_rules_text":
         return "multiline"
     if module_name == "domain_registry" and input_name == "registry_json":
@@ -397,6 +402,14 @@ def _template_field(module_name: str, input_obj) -> Dict[str, Any]:
             "_input_type": "MultilineInput",
             "input_types": [],
             "multiline": True,
+            "type": "str",
+        }
+    if input_kind == "secret":
+        return {
+            **base,
+            "_input_type": "SecretStrInput",
+            "input_types": [],
+            "password": True,
             "type": "str",
         }
     return {

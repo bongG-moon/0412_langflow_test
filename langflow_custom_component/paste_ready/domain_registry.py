@@ -279,7 +279,7 @@ def lf_runtime_shared_config__clean_text(value: lf_runtime_shared_config_Any) ->
     return str(value or '').strip()
 
 def lf_runtime_shared_config_set_active_llm_config(config: lf_runtime_shared_config_Dict[str, lf_runtime_shared_config_Any] | None=None) -> None:
-    """Store per-run LLM settings passed through the Langflow state payload."""
+    """Store per-node LLM settings entered in the Langflow component UI."""
     global lf_runtime_shared_config_ACTIVE_LLM_CONFIG
     if not isinstance(config, dict):
         lf_runtime_shared_config_ACTIVE_LLM_CONFIG = {}
@@ -784,11 +784,9 @@ def lf_node_utils_read_domain_registry_payload(value: lf_node_utils_Any) -> lf_n
     return lf_node_utils_coerce_json_field(registry_payload, {})
 
 def lf_node_utils_activate_domain_context_from_state(state: lf_node_utils_Dict[str, lf_node_utils_Any]) -> None:
-    """Push the current state's runtime inputs into the standalone runtime layer."""
+    """Push the current state's domain inputs into the runtime registry layer."""
     set_active_domain_context = lf_runtime_domain_registry_set_active_domain_context
-    set_active_llm_config = lf_runtime_shared_config_set_active_llm_config
     set_active_domain_context(domain_rules_text=state.get('domain_rules_text', ''), domain_registry_payload=state.get('domain_registry_payload', {}))
-    set_active_llm_config(state.get('llm_config', {}))
 
 # ---- node component ----
 import sys

@@ -121,8 +121,39 @@ def lf_component_base_read_state_payload(value: lf_component_base_Any) -> lf_com
         return state
     return payload if isinstance(payload, dict) else {}
 
+# ---- visible runtime: llm_settings ----
+"""Reusable Langflow inputs for nodes that call an LLM."""
+import typing as lf_llm_settings_import_typing
+lf_llm_settings_Any = lf_llm_settings_import_typing.Any
+lf_llm_settings_MessageTextInput = lf_component_base_MessageTextInput
+lf_llm_settings_SecretStrInput = lf_component_base_SecretStrInput
+
+def lf_llm_settings_read_secret_text(value: lf_llm_settings_Any) -> str:
+    """Read plain or SecretStr-like values from Langflow inputs."""
+    if value is None:
+        return ''
+    if hasattr(value, 'get_secret_value'):
+        try:
+            return str(value.get_secret_value() or '').strip()
+        except Exception:
+            return ''
+    return str(value or '').strip()
+
+def lf_llm_settings_llm_settings_inputs() -> list[lf_llm_settings_Any]:
+    """Return reusable LLM inputs for nodes that actually call the model."""
+    return [lf_llm_settings_SecretStrInput(name='llm_api_key', display_name='LLM API Key', info='Gemini API key. Bind this to a Langflow Global Variable if desired.', advanced=True), lf_llm_settings_MessageTextInput(name='llm_fast_model', display_name='Fast Model', value='gemini-flash-latest', info='Model used for parameter extraction, routing, and response summaries.', advanced=True), lf_llm_settings_MessageTextInput(name='llm_strong_model', display_name='Strong Model', value='gemini-flash-latest', info='Model used for dataset planning and pandas analysis code generation.', advanced=True)]
+
+def lf_llm_settings_apply_llm_settings_from_component(component: lf_llm_settings_Any, set_active_llm_config: lf_llm_settings_Any) -> None:
+    """Apply LLM settings from one Langflow node before invoking runtime code."""
+    fast_model = str(getattr(component, 'llm_fast_model', '') or 'gemini-flash-latest').strip()
+    strong_model = str(getattr(component, 'llm_strong_model', '') or fast_model).strip()
+    set_active_llm_config({'api_key': lf_llm_settings_read_secret_text(getattr(component, 'llm_api_key', None)), 'fast_model': fast_model or 'gemini-flash-latest', 'strong_model': strong_model or fast_model or 'gemini-flash-latest'})
+
 # ---- visible runtime: _runtime ----
 """Standalone runtime copied for Langflow custom components."""
+
+# ---- visible runtime: _runtime.shared ----
+"""공용 설정과 유틸리티 모음."""
 
 # ---- visible runtime: _runtime.shared.filter_utils ----
 import re as lf_runtime_shared_filter_utils_re
@@ -425,7 +456,7 @@ def lf_runtime_shared_config__clean_text(value: lf_runtime_shared_config_Any) ->
     return str(value or '').strip()
 
 def lf_runtime_shared_config_set_active_llm_config(config: lf_runtime_shared_config_Dict[str, lf_runtime_shared_config_Any] | None=None) -> None:
-    """Store per-run LLM settings passed through the Langflow state payload."""
+    """Store per-node LLM settings entered in the Langflow component UI."""
     global lf_runtime_shared_config_ACTIVE_LLM_CONFIG
     if not isinstance(config, dict):
         lf_runtime_shared_config_ACTIVE_LLM_CONFIG = {}
@@ -1418,11 +1449,9 @@ def lf_node_utils_read_domain_registry_payload(value: lf_node_utils_Any) -> lf_n
     return lf_node_utils_coerce_json_field(registry_payload, {})
 
 def lf_node_utils_activate_domain_context_from_state(state: lf_node_utils_Dict[str, lf_node_utils_Any]) -> None:
-    """Push the current state's runtime inputs into the standalone runtime layer."""
+    """Push the current state's domain inputs into the runtime registry layer."""
     set_active_domain_context = lf_runtime_domain_registry_set_active_domain_context
-    set_active_llm_config = lf_runtime_shared_config_set_active_llm_config
     set_active_domain_context(domain_rules_text=state.get('domain_rules_text', ''), domain_registry_payload=state.get('domain_registry_payload', {}))
-    set_active_llm_config(state.get('llm_config', {}))
 
 # ---- visible runtime: _runtime.services ----
 """그래프 노드와 외부 래퍼가 공통으로 사용하는 서비스 함수 모음."""
@@ -2114,7 +2143,10 @@ DataInput = lf_component_base_DataInput
 Output = lf_component_base_Output
 make_data = lf_component_base_make_data
 read_state_payload = lf_component_base_read_state_payload
+llm_settings_inputs = lf_llm_settings_llm_settings_inputs
+apply_llm_settings_from_component = lf_llm_settings_apply_llm_settings_from_component
 activate_domain_context_from_state = lf_node_utils_activate_domain_context_from_state
+set_active_llm_config = lf_runtime_shared_config_set_active_llm_config
 pick_retrieval_tools = lf_runtime_data_retrieval_pick_retrieval_tools
 plan_retrieval_request = lf_runtime_services_retrieval_planner_plan_retrieval_request
 
@@ -2126,7 +2158,10 @@ class PlanDatasetsComponent(Component):
     icon = "TableProperties"
     name = "plan_datasets"
 
-    inputs = [DataInput(name="state", display_name="State", info="State after query mode has been decided")]
+    inputs = [
+        DataInput(name="state", display_name="State", info="State after query mode has been decided"),
+        *llm_settings_inputs(),
+    ]
     outputs = [Output(name="state_out", display_name="State", method="plan_datasets", types=["Data"], selected="Data")]
 
     def plan_datasets(self):
@@ -2136,6 +2171,7 @@ class PlanDatasetsComponent(Component):
             return None
 
         activate_domain_context_from_state(state)
+        apply_llm_settings_from_component(self, set_active_llm_config)
         retrieval_plan = plan_retrieval_request(
             state.get("user_input", ""),
             state.get("chat_history", []),
