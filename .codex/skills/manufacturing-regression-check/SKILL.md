@@ -1,6 +1,6 @@
 ---
 name: manufacturing-regression-check
-description: Use when validating that changes to LangGraph, Langflow, Streamlit, Codex CLI, or another wrapper still preserve the manufacturing agent's core branch behavior, payload shape, and multi-turn semantics.
+description: Use when validating that changes to LangGraph, Streamlit, Codex CLI, or another wrapper still preserve the manufacturing agent's core branch behavior, payload shape, and multi-turn semantics.
 ---
 
 # Manufacturing Regression Check
@@ -27,5 +27,6 @@ Use this skill for behavior verification after changes or migrations.
 
 ## Rule
 
-A wrapper is not "compatible" just because it returns some answer.
-It should preserve the harness contract closely enough that later turns and downstream tools still behave the same way.
+A wrapper is not compatible just because it returns some answer. It should
+preserve the harness contract closely enough that later turns and downstream
+tools still behave the same way.

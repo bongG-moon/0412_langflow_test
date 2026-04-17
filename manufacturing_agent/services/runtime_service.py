@@ -1,4 +1,4 @@
-"""Runtime helpers shared by LangGraph nodes and Langflow components."""
+"""Runtime helpers shared by LangGraph nodes and UI surfaces."""
 
 from copy import deepcopy
 from typing import Any, Dict, List

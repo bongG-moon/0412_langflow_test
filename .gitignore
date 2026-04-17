@@ -1,5 +1,4 @@
 .env
-.langflow_session_store/
 __pycache__/
 *.pyc
 .pytest_cache/

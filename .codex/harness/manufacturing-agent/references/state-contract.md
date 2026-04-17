@@ -1,6 +1,7 @@
 # State Contract
 
-The manufacturing agent uses a shared state model so that LangGraph, Langflow, Streamlit, Codex CLI, and other tools can preserve the same semantics.
+The manufacturing agent uses a shared state model so that LangGraph, Streamlit,
+Codex CLI, tests, and other Python callers can preserve the same semantics.
 
 ## Core Inputs
 
@@ -26,7 +27,8 @@ For a follow-up question to behave correctly, preserve and feed back:
 - `context`
 - `current_data`
 
-If one of these is dropped, later turns may be misrouted as fresh retrievals instead of follow-up analysis.
+If one of these is dropped, later turns may be misrouted as fresh retrievals
+instead of follow-up analysis.
 
 ## Result Payload Contract
 
@@ -39,8 +41,3 @@ The final payload should preserve these fields when available:
 - `awaiting_analysis_choice`
 
 Optional metadata is allowed if it does not break downstream readers.
-
-## Practical Rule
-
-If you are porting this workflow to another tool, keep the state dictionary stable first.
-Only then adapt the UI, canvas, or session mechanics around it.

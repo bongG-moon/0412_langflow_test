@@ -1,0 +1,155 @@
+{
+  "domain_id": "manufacturing_default",
+  "version": "phase1-dev",
+  "status": "active",
+  "metadata": {
+    "display_name": "제조 분석 기본 도메인",
+    "description": "Phase 1 더미 데이터 조회와 분석에 사용할 도메인 정의",
+    "timezone": "Asia/Seoul"
+  },
+  "domain": {
+    "products": {
+      "A": {
+        "display_name": "A제품",
+        "aliases": ["A", "A제품", "에이제품"],
+        "filters": {
+          "product": "A"
+        }
+      },
+      "B": {
+        "display_name": "B제품",
+        "aliases": ["B", "B제품", "비제품"],
+        "filters": {
+          "product": "B"
+        }
+      }
+    },
+    "process_groups": {
+      "PKG": {
+        "display_name": "패키지 공정",
+        "aliases": ["PKG", "패키지", "패키지공정"],
+        "processes": ["DA", "WB", "MOLD", "TEST"]
+      },
+      "DA_GROUP": {
+        "display_name": "DA 공정",
+        "aliases": ["DA", "다이 어태치", "다이부착"],
+        "processes": ["DA"]
+      },
+      "WB_GROUP": {
+        "display_name": "WB 공정",
+        "aliases": ["WB", "와이어 본딩", "와이어본딩"],
+        "processes": ["WB"]
+      }
+    },
+    "terms": {
+      "Auto": {
+        "display_name": "Auto향",
+        "aliases": ["Auto향", "자동차향", "오토"],
+        "filter": {
+          "column": "mcp_no",
+          "operator": "suffix_in",
+          "values": ["I", "O", "N", "P", "1", "V"]
+        }
+      },
+      "HBM": {
+        "display_name": "HBM",
+        "aliases": ["HBM", "3DS"],
+        "filter": {
+          "column": "tsv_die_type",
+          "operator": "equals",
+          "value": "TSV"
+        }
+      }
+    },
+    "datasets": {
+      "production": {
+        "display_name": "생산 데이터",
+        "description": "일자별 공정, 제품, 라인 생산량 데이터",
+        "keywords": ["생산", "생산량", "투입", "output", "input"],
+        "required_params": ["date"],
+        "query_template_id": "production_by_date",
+        "columns": [
+          {"name": "date", "type": "date", "description": "기준 일자"},
+          {"name": "product", "type": "string", "description": "제품 구분"},
+          {"name": "process", "type": "string", "description": "공정"},
+          {"name": "line", "type": "string", "description": "라인"},
+          {"name": "mcp_no", "type": "string", "description": "MCP 번호"},
+          {"name": "tsv_die_type", "type": "string", "description": "TSV 구분"},
+          {"name": "qty", "type": "number", "description": "생산 수량"}
+        ]
+      },
+      "target": {
+        "display_name": "목표 데이터",
+        "description": "일자별 공정, 제품, 라인 목표량 데이터",
+        "keywords": ["목표", "계획", "target", "목표량"],
+        "required_params": ["date"],
+        "query_template_id": "target_by_date",
+        "columns": [
+          {"name": "date", "type": "date", "description": "기준 일자"},
+          {"name": "product", "type": "string", "description": "제품 구분"},
+          {"name": "process", "type": "string", "description": "공정"},
+          {"name": "line", "type": "string", "description": "라인"},
+          {"name": "target_qty", "type": "number", "description": "목표 수량"}
+        ]
+      },
+      "defect": {
+        "display_name": "불량 데이터",
+        "description": "일자별 제품, 공정, 불량 유형, 불량 수량 데이터",
+        "keywords": ["불량", "불량률", "defect"],
+        "required_params": ["date"],
+        "query_template_id": "defect_by_date",
+        "columns": [
+          {"name": "date", "type": "date", "description": "기준 일자"},
+          {"name": "product", "type": "string", "description": "제품 구분"},
+          {"name": "process", "type": "string", "description": "공정"},
+          {"name": "defect_type", "type": "string", "description": "불량 유형"},
+          {"name": "defect_qty", "type": "number", "description": "불량 수량"}
+        ]
+      }
+    },
+    "metrics": {
+      "production_qty": {
+        "display_name": "생산량",
+        "aliases": ["생산량", "생산", "투입량", "output"],
+        "required_datasets": ["production"],
+        "formula": "sum(production.qty)",
+        "output_column": "production_qty"
+      },
+      "target_qty": {
+        "display_name": "목표량",
+        "aliases": ["목표량", "목표", "계획량", "target"],
+        "required_datasets": ["target"],
+        "formula": "sum(target.target_qty)",
+        "output_column": "target_qty"
+      },
+      "achievement_rate": {
+        "display_name": "생산 달성율",
+        "aliases": ["달성율", "달성률", "목표 대비", "achievement"],
+        "required_datasets": ["production", "target"],
+        "formula": "sum(production.qty) / sum(target.target_qty) * 100",
+        "output_column": "achievement_rate",
+        "default_output_unit": "%"
+      },
+      "defect_rate": {
+        "display_name": "불량률",
+        "aliases": ["불량률", "defect rate"],
+        "required_datasets": ["production", "defect"],
+        "formula": "sum(defect.defect_qty) / sum(production.qty) * 100",
+        "output_column": "defect_rate",
+        "default_output_unit": "%"
+      }
+    },
+    "join_rules": [
+      {
+        "datasets": ["production", "target"],
+        "keys": ["date", "product", "process", "line"],
+        "join_type": "left"
+      },
+      {
+        "datasets": ["production", "defect"],
+        "keys": ["date", "product", "process"],
+        "join_type": "left"
+      }
+    ]
+  }
+}
