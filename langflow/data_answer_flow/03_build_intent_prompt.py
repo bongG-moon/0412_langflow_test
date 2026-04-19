@@ -145,7 +145,7 @@ def build_intent_prompt(
     user_question: str,
     agent_state_payload: Any,
     domain_payload: Any,
-    domain_index_payload: Any | None = None,
+    domain_index_payload: Any,
 ) -> str:
     state_payload = _payload_from_value(agent_state_payload)
     agent_state = state_payload.get("agent_state")
@@ -160,7 +160,7 @@ def build_intent_prompt(
     index_payload = _payload_from_value(domain_index_payload)
     domain_index = index_payload.get("domain_index")
     if not isinstance(domain_index, dict):
-        domain_index = domain_full_payload.get("domain_index") if isinstance(domain_full_payload.get("domain_index"), dict) else {}
+        domain_index = {}
 
     context = agent_state.get("context", {}) if isinstance(agent_state, dict) else {}
     chat_history = agent_state.get("chat_history", []) if isinstance(agent_state, dict) else []
@@ -238,7 +238,7 @@ class BuildIntentPrompt(Component):
         DataInput(
             name="domain_index",
             display_name="Domain Index",
-            info="Optional Domain Index output from Domain JSON Loader.",
+            info="Domain Index output from Domain JSON Loader.",
             input_types=["Data", "JSON"],
         ),
     ]

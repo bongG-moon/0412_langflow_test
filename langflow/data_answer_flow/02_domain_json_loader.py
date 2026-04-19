@@ -64,7 +64,6 @@ Component = _load_attr(
     _FallbackComponent,
 )
 DataInput = _load_attr(["lfx.io", "langflow.io"], "DataInput", _make_input)
-MultilineInput = _load_attr(["lfx.io", "langflow.io"], "MultilineInput", _make_input)
 Output = _load_attr(["lfx.io", "langflow.io"], "Output", _FallbackOutput)
 Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", _FallbackData)
 
@@ -135,7 +134,7 @@ def _parse_domain_json(domain_json_text: Any) -> tuple[Dict[str, Any], list[str]
     errors: list[str] = []
     text = _extract_json_text(domain_json_text)
     if not text:
-        errors.append("domain_json_text is empty.")
+        errors.append("domain_json_payload is empty.")
         return {}, errors
     try:
         parsed = json.loads(text)
@@ -320,14 +319,8 @@ class DomainJsonLoader(Component):
         DataInput(
             name="domain_json_payload",
             display_name="Domain JSON Payload",
-            info="Optional output from Domain JSON Input.",
+            info="Standard Domain JSON payload from Domain JSON Input or Domain Authoring Flow.",
             input_types=["Data", "JSON"],
-        ),
-        MultilineInput(
-            name="domain_json_text",
-            display_name="Domain JSON Text",
-            info="Paste the domain JSON document or bare domain object.",
-            value="",
         ),
     ]
 
@@ -349,17 +342,22 @@ class DomainJsonLoader(Component):
     ]
 
     def build_domain_payload(self) -> Data:
-        source = getattr(self, "domain_json_payload", None) or getattr(self, "domain_json_text", "")
+        source = getattr(self, "domain_json_payload", None)
         payload = load_domain_json(source)
-        return _make_data(payload, text=json.dumps(payload, ensure_ascii=False))
+        domain_payload = {
+            "domain_document": payload["domain_document"],
+            "domain": payload["domain"],
+            "domain_errors": payload["domain_errors"],
+        }
+        return _make_data(domain_payload, text=json.dumps(domain_payload, ensure_ascii=False))
 
     def build_domain(self) -> Data:
-        source = getattr(self, "domain_json_payload", None) or getattr(self, "domain_json_text", "")
+        source = getattr(self, "domain_json_payload", None)
         payload = load_domain_json(source)
         return _make_data({"domain": payload["domain"]}, text=json.dumps(payload["domain"], ensure_ascii=False))
 
     def build_domain_index(self) -> Data:
-        source = getattr(self, "domain_json_payload", None) or getattr(self, "domain_json_text", "")
+        source = getattr(self, "domain_json_payload", None)
         payload = load_domain_json(source)
         return _make_data(
             {"domain_index": payload["domain_index"], "domain_errors": payload["domain_errors"]},
@@ -367,7 +365,7 @@ class DomainJsonLoader(Component):
         )
 
     def build_domain_document(self) -> Data:
-        source = getattr(self, "domain_json_payload", None) or getattr(self, "domain_json_text", "")
+        source = getattr(self, "domain_json_payload", None)
         payload = load_domain_json(source)
         return _make_data(
             {"domain_document": payload["domain_document"]},

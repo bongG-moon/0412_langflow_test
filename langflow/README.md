@@ -39,7 +39,7 @@ Then connect the custom components in this order:
 
 All custom component-to-component links in this flow use Langflow `Data`/`JSON` ports. The helper input nodes do not need a value before wiring; if a link is disabled in the canvas, refresh/reload the custom components so Langflow re-reads the updated port metadata.
 
-Recommended connections:
+Connections to build:
 
 | From | To | Required |
 | --- | --- | --- |
@@ -56,8 +56,8 @@ Recommended connections:
 | `Domain JSON Loader.domain_payload` | `Build Intent Prompt.domain_payload` | Yes |
 | `Domain JSON Loader.domain_payload` | `Normalize Intent With Domain.domain_payload` | Yes |
 | `Domain JSON Loader.domain_payload` | `Query Mode Decider.domain_payload` | Yes |
-| `Domain JSON Loader.domain_index` | `Build Intent Prompt.domain_index` | Recommended |
-| `Domain JSON Loader.domain_index` | `Normalize Intent With Domain.domain_index` | Recommended |
+| `Domain JSON Loader.domain_index` | `Build Intent Prompt.domain_index` | Yes |
+| `Domain JSON Loader.domain_index` | `Normalize Intent With Domain.domain_index` | Yes |
 | `Build Intent Prompt.intent_prompt` | `LLM JSON Caller.prompt` | Yes |
 | `LLM JSON Caller.llm_result` | `Parse Intent JSON.llm_result` | Yes |
 | `Parse Intent JSON.intent_raw` | `Normalize Intent With Domain.intent_raw` | Yes |
@@ -116,11 +116,11 @@ Do not connect these for the current implementation:
 LLM JSON Caller.llm_text -> Parse Intent JSON.llm_text
 ```
 
-`Domain JSON Loader` intentionally exposes only `domain_payload` and `domain_index` as visible outputs. `domain_payload` already contains the full domain and index, so the separate `domain_index` links are recommended for clarity but not required for execution.
+`Domain JSON Loader` intentionally exposes `domain_payload` and `domain_index` as separate visible outputs. `domain_payload` carries the domain document and detailed domain definitions; `domain_index` carries the alias lookup dictionaries used by the prompt and normalization nodes. Connect both outputs explicitly.
 
 `LLM JSON Caller.llm_text` is accepted only as a defensive/manual fallback in `Parse Intent JSON`; the implemented Langflow output is `llm_result`.
 
-You can still skip `00_domain_json_input.py` or `00_previous_state_json_input.py` and type directly into `Domain JSON Loader.domain_json_text` or `Session State Loader.previous_state_json`. The helper input nodes are provided so the fields are visible as separate canvas nodes.
+Use `00_domain_json_input.py` or the future Domain Authoring Flow output as the source for `Domain JSON Loader.domain_json_payload`. You can still skip `00_previous_state_json_input.py` and type directly into `Session State Loader.previous_state_json`. The helper input nodes are provided so the fields are visible as separate canvas nodes.
 
 Each LLM caller receives its own `llm_api_key`, `model_name`, `temperature`, and `timeout_seconds` inputs. There is no shared LLM config node. The current implementation calls `langchain_google_genai.ChatGoogleGenerativeAI`, matching the LangGraph implementation style.
 

@@ -529,7 +529,9 @@ Phase 1에서는 Langflow Multiline Text Input으로 구현한다. 사용자가 
 
 출력:
 
-- `domain_json_text: str`
+- `domain_json_payload: Data`
+
+`domain_json_payload` 안에는 사용자가 붙여넣은 표준 Domain JSON 문자열을 담는다. 이 payload는 다음 노드인 `Domain JSON Loader.domain_json_payload`로 연결한다.
 
 권장 입력 구조:
 
@@ -658,16 +660,19 @@ Custom Component로 구현한다.
 
 입력:
 
-- `domain_json_text`
+- `domain_json_payload`
 
 역할:
 
-- Domain JSON을 파싱한다.
+- `Domain JSON Input` 또는 `Domain Authoring Flow`가 만든 표준 Domain JSON payload를 파싱한다.
 - preferred wrapper 구조와 bare domain 구조를 모두 표준 wrapper 구조로 정규화한다.
 - products, process_groups, terms, datasets, metrics, join_rules를 표준 dict로 만든다.
 - alias 검색을 쉽게 하기 위한 reverse index를 만든다.
+- 하나의 Domain JSON 입력에서 `domain_payload`와 `domain_index`를 모두 자동 생성한다.
 
 출력:
+
+`domain_payload`:
 
 ```json
 {
@@ -678,6 +683,14 @@ Custom Component로 구현한다.
     "domain": {}
   },
   "domain": {},
+  "domain_errors": []
+}
+```
+
+`domain_index`:
+
+```json
+{
   "domain_index": {
     "term_alias_to_key": {},
     "product_alias_to_key": {},
@@ -713,7 +726,7 @@ Custom Component로 구현한다.
 
 - `user_question`
 - `agent_state`
-- `domain`
+- `domain_payload`
 - `domain_index`
 
 역할:
@@ -1431,8 +1444,8 @@ Domain JSON Input
 | `Domain JSON Loader.domain_payload` | `Build Intent Prompt.domain_payload` | Yes |
 | `Domain JSON Loader.domain_payload` | `Normalize Intent With Domain.domain_payload` | Yes |
 | `Domain JSON Loader.domain_payload` | `Query Mode Decider.domain_payload` | Yes |
-| `Domain JSON Loader.domain_index` | `Build Intent Prompt.domain_index` | Recommended |
-| `Domain JSON Loader.domain_index` | `Normalize Intent With Domain.domain_index` | Recommended |
+| `Domain JSON Loader.domain_index` | `Build Intent Prompt.domain_index` | Yes |
+| `Domain JSON Loader.domain_index` | `Normalize Intent With Domain.domain_index` | Yes |
 | `Build Intent Prompt.intent_prompt` | `LLM JSON Caller.prompt` | Yes |
 | `LLM JSON Caller.llm_result` | `Parse Intent JSON.llm_result` | Yes |
 | `Parse Intent JSON.intent_raw` | `Normalize Intent With Domain.intent_raw` | Yes |
@@ -2536,7 +2549,12 @@ Custom Component로 구현한다.
 
 ```json
 {
-  "domain_json_text": "{}",
+  "domain_json_payload": {
+    "domain_id": "manufacturing_default",
+    "status": "active",
+    "metadata": {},
+    "domain": {}
+  },
   "preview_text": "",
   "is_saveable": true,
   "saved": false,
