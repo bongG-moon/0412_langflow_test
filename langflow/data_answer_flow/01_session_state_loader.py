@@ -172,7 +172,7 @@ class SessionStateLoader(Component):
             name="previous_state_payload",
             display_name="Previous State Payload",
             info="Optional output from Previous State JSON Input.",
-            input_types=["Data"],
+            input_types=["Data", "JSON"],
         ),
         MultilineInput(
             name="previous_state_json",
@@ -197,7 +197,7 @@ class SessionStateLoader(Component):
         Output(name="agent_state", display_name="Agent State", method="build_agent_state", types=["Data"]),
     ]
 
-    def build_agent_state(self) -> Any:
+    def build_agent_state(self) -> Data:
         previous_state_source = getattr(self, "previous_state_payload", None) or getattr(self, "previous_state_json", "")
         state = load_session_state(
             previous_state_source,

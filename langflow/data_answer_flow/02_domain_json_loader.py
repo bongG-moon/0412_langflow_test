@@ -323,7 +323,7 @@ class DomainJsonLoader(Component):
             name="domain_json_payload",
             display_name="Domain JSON Payload",
             info="Optional output from Domain JSON Input.",
-            input_types=["Data"],
+            input_types=["Data", "JSON"],
         ),
         MultilineInput(
             name="domain_json_text",
@@ -334,23 +334,33 @@ class DomainJsonLoader(Component):
     ]
 
     outputs = [
-        Output(name="domain_payload", display_name="Domain Payload", method="build_domain_payload", types=["Data"]),
-        Output(name="domain", display_name="Domain", method="build_domain", types=["Data"]),
-        Output(name="domain_index", display_name="Domain Index", method="build_domain_index", types=["Data"]),
-        Output(name="domain_document", display_name="Domain Document", method="build_domain_document", types=["Data"]),
+        Output(
+            name="domain_payload",
+            display_name="Domain Payload",
+            method="build_domain_payload",
+            group_outputs=True,
+            types=["Data"],
+        ),
+        Output(
+            name="domain_index",
+            display_name="Domain Index",
+            method="build_domain_index",
+            group_outputs=True,
+            types=["Data"],
+        ),
     ]
 
-    def build_domain_payload(self) -> Any:
+    def build_domain_payload(self) -> Data:
         source = getattr(self, "domain_json_payload", None) or getattr(self, "domain_json_text", "")
         payload = load_domain_json(source)
         return _make_data(payload, text=json.dumps(payload, ensure_ascii=False))
 
-    def build_domain(self) -> Any:
+    def build_domain(self) -> Data:
         source = getattr(self, "domain_json_payload", None) or getattr(self, "domain_json_text", "")
         payload = load_domain_json(source)
         return _make_data({"domain": payload["domain"]}, text=json.dumps(payload["domain"], ensure_ascii=False))
 
-    def build_domain_index(self) -> Any:
+    def build_domain_index(self) -> Data:
         source = getattr(self, "domain_json_payload", None) or getattr(self, "domain_json_text", "")
         payload = load_domain_json(source)
         return _make_data(
@@ -358,7 +368,7 @@ class DomainJsonLoader(Component):
             text=json.dumps(payload["domain_index"], ensure_ascii=False),
         )
 
-    def build_domain_document(self) -> Any:
+    def build_domain_document(self) -> Data:
         source = getattr(self, "domain_json_payload", None) or getattr(self, "domain_json_text", "")
         payload = load_domain_json(source)
         return _make_data(

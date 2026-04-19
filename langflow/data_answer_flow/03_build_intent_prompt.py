@@ -223,18 +223,23 @@ class BuildIntentPrompt(Component):
 
     inputs = [
         MessageTextInput(name="user_question", display_name="User Question", info="Current user question."),
-        DataInput(name="agent_state", display_name="Agent State", info="Output from Session State Loader.", input_types=["Data"]),
+        DataInput(
+            name="agent_state",
+            display_name="Agent State",
+            info="Output from Session State Loader.",
+            input_types=["Data", "JSON"],
+        ),
         DataInput(
             name="domain_payload",
             display_name="Domain Payload",
             info="Domain Payload output from Domain JSON Loader.",
-            input_types=["Data"],
+            input_types=["Data", "JSON"],
         ),
         DataInput(
             name="domain_index",
             display_name="Domain Index",
             info="Optional Domain Index output from Domain JSON Loader.",
-            input_types=["Data"],
+            input_types=["Data", "JSON"],
         ),
     ]
 
@@ -242,7 +247,7 @@ class BuildIntentPrompt(Component):
         Output(name="intent_prompt", display_name="Intent Prompt", method="build_prompt", types=["Data"]),
     ]
 
-    def build_prompt(self) -> Any:
+    def build_prompt(self) -> Data:
         prompt = build_intent_prompt(
             getattr(self, "user_question", ""),
             getattr(self, "agent_state", None),

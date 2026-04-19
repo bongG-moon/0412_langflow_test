@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from importlib import import_module
@@ -116,28 +117,51 @@ def _read_prompt(value: Any) -> str:
     return str(text or "").strip()
 
 
-def _endpoint_from_base_url(base_url: str) -> str:
-    base = str(base_url or "https://api.openai.com/v1").strip().rstrip("/")
-    if base.endswith("/chat/completions"):
-        return base
-    return base + "/chat/completions"
+def _generate_content_endpoint(model_name: str, api_version: str = "v1beta") -> str:
+    version = str(api_version or "v1beta").strip().strip("/") or "v1beta"
+    model = str(model_name or "").strip()
+    if model.startswith("models/"):
+        model = model.split("/", 1)[1]
+    encoded_model = urllib.parse.quote(model, safe="-_.")
+    return f"https://generativelanguage.googleapis.com/{version}/models/{encoded_model}:generateContent"
 
 
-def call_openai_compatible_json(
+def _extract_llm_response_text(parsed: Dict[str, Any]) -> str:
+    candidates = parsed.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        return ""
+
+    first = candidates[0] if isinstance(candidates[0], dict) else {}
+    content = first.get("content") if isinstance(first, dict) else {}
+    parts = content.get("parts") if isinstance(content, dict) else []
+    if not isinstance(parts, list):
+        return ""
+
+    text_parts: list[str] = []
+    for part in parts:
+        if isinstance(part, dict) and isinstance(part.get("text"), str):
+            text_parts.append(part["text"])
+    return "".join(text_parts).strip()
+
+
+def call_llm_json(
     prompt: Any,
     llm_api_key: Any,
-    llm_base_url: str,
     model_name: str,
     temperature: Any,
     timeout_seconds: Any,
+    api_version: str = "v1beta",
 ) -> Dict[str, Any]:
     prompt_text = _read_prompt(prompt)
     api_key = _read_secret(llm_api_key)
-    model = str(model_name or "").strip()
-    endpoint = _endpoint_from_base_url(llm_base_url)
+    model = str(model_name or "").strip() or "gemini-flash-latest"
+    endpoint = _generate_content_endpoint(model, api_version)
     debug: Dict[str, Any] = {
+        "provider": "llm_api",
         "endpoint": endpoint,
         "model_name": model,
+        "api_version": str(api_version or "v1beta"),
+        "response_mime_type": "application/json",
         "prompt_chars": len(prompt_text),
         "ok": False,
         "error": None,
@@ -148,9 +172,6 @@ def call_openai_compatible_json(
         return {"llm_text": "", "llm_debug": debug}
     if not api_key:
         debug["error"] = "llm_api_key is empty"
-        return {"llm_text": "", "llm_debug": debug}
-    if not model:
-        debug["error"] = "model_name is empty"
         return {"llm_text": "", "llm_debug": debug}
 
     try:
@@ -163,18 +184,25 @@ def call_openai_compatible_json(
         timeout = 60.0
 
     body = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "Return only valid JSON. Do not include markdown fences."},
-            {"role": "user", "content": prompt_text},
+        "system_instruction": {
+            "parts": [{"text": "Return only valid JSON. Do not include markdown fences."}],
+        },
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": prompt_text}],
+            }
         ],
-        "temperature": temp,
+        "generationConfig": {
+            "temperature": temp,
+            "responseMimeType": "application/json",
+        },
     }
     request = urllib.request.Request(
         endpoint,
         data=json.dumps(body).encode("utf-8"),
         headers={
-            "Authorization": f"Bearer {api_key}",
+            "x-goog-api-key": api_key,
             "Content-Type": "application/json",
         },
         method="POST",
@@ -192,7 +220,15 @@ def call_openai_compatible_json(
 
     try:
         parsed = json.loads(raw)
-        text = parsed["choices"][0]["message"]["content"]
+        text = _extract_llm_response_text(parsed)
+        if not text:
+            prompt_feedback = parsed.get("promptFeedback") or parsed.get("prompt_feedback")
+            finish_reason = None
+            candidates = parsed.get("candidates")
+            if isinstance(candidates, list) and candidates and isinstance(candidates[0], dict):
+                finish_reason = candidates[0].get("finishReason") or candidates[0].get("finish_reason")
+            debug["error"] = f"empty LLM response text; finish_reason={finish_reason}; prompt_feedback={prompt_feedback}"
+            return {"llm_text": "", "llm_debug": debug}
     except Exception:
         text = raw
     debug["ok"] = True
@@ -202,20 +238,30 @@ def call_openai_compatible_json(
 
 class LLMJsonCaller(Component):
     display_name = "LLM JSON Caller"
-    description = "Call an OpenAI-compatible chat completions endpoint and return JSON-oriented text."
+    description = "Call an LLM API and return JSON-oriented text."
     icon = "BrainCircuit"
     name = "LLMJsonCaller"
 
     inputs = [
-        DataInput(name="prompt", display_name="Prompt", info="Prompt payload from a prompt builder.", input_types=["Data"]),
-        SecretStrInput(name="llm_api_key", display_name="LLM API Key", advanced=True),
-        MessageTextInput(
-            name="llm_base_url",
-            display_name="LLM Base URL",
-            value="https://api.openai.com/v1",
+        DataInput(
+            name="prompt",
+            display_name="Prompt",
+            info="Prompt payload from a prompt builder.",
+            input_types=["Data", "JSON"],
+        ),
+        SecretStrInput(
+            name="llm_api_key",
+            display_name="LLM API Key",
+            info="API key used by this LLM node.",
             advanced=True,
         ),
-        MessageTextInput(name="model_name", display_name="Model Name", info="Model to use for this LLM node."),
+        MessageTextInput(
+            name="model_name",
+            display_name="Model Name",
+            info="Model to use for this LLM node.",
+            value="gemini-flash-latest",
+        ),
+        MessageTextInput(name="api_version", display_name="LLM API Version", value="v1beta", advanced=True),
         MessageTextInput(name="temperature", display_name="Temperature", value="0", advanced=True),
         MessageTextInput(name="timeout_seconds", display_name="Timeout Seconds", value="60", advanced=True),
     ]
@@ -224,13 +270,13 @@ class LLMJsonCaller(Component):
         Output(name="llm_result", display_name="LLM Result", method="call_llm", types=["Data"]),
     ]
 
-    def call_llm(self) -> Any:
-        payload = call_openai_compatible_json(
+    def call_llm(self) -> Data:
+        payload = call_llm_json(
             getattr(self, "prompt", None),
             getattr(self, "llm_api_key", None),
-            getattr(self, "llm_base_url", "https://api.openai.com/v1"),
             getattr(self, "model_name", ""),
             getattr(self, "temperature", "0"),
             getattr(self, "timeout_seconds", "60"),
+            getattr(self, "api_version", "v1beta"),
         )
         return _make_data(payload, text=payload.get("llm_text", ""))

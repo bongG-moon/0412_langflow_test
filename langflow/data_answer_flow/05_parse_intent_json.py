@@ -193,7 +193,12 @@ class ParseIntentJson(Component):
     name = "ParseIntentJson"
 
     inputs = [
-        DataInput(name="llm_result", display_name="LLM Result", info="Output from LLM JSON Caller.", input_types=["Data"]),
+        DataInput(
+            name="llm_result",
+            display_name="LLM Result",
+            info="Output from LLM JSON Caller.",
+            input_types=["Data", "JSON"],
+        ),
         MultilineInput(name="llm_text", display_name="LLM Text", value="", advanced=True),
     ]
 
@@ -201,7 +206,7 @@ class ParseIntentJson(Component):
         Output(name="intent_raw", display_name="Intent Raw", method="build_intent_raw", types=["Data"]),
     ]
 
-    def build_intent_raw(self) -> Any:
+    def build_intent_raw(self) -> Data:
         value = getattr(self, "llm_result", None) or getattr(self, "llm_text", "")
         payload = parse_intent_json(value)
         return _make_data(payload, text=json.dumps(payload["intent_raw"], ensure_ascii=False))

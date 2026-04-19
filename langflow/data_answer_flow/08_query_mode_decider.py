@@ -370,19 +370,19 @@ class QueryModeDecider(Component):
             name="intent",
             display_name="Intent or Data Question Branch",
             info="Output from Normalize Intent With Domain or Data Question branch from Request Type Router.",
-            input_types=["Data"],
+            input_types=["Data", "JSON"],
         ),
         DataInput(
             name="agent_state",
             display_name="Agent State",
             info="Output from Session State Loader. Optional when router branch payload already contains agent_state.",
-            input_types=["Data"],
+            input_types=["Data", "JSON"],
         ),
         DataInput(
             name="domain_payload",
             display_name="Domain Payload",
             info="Domain Payload output from Domain JSON Loader.",
-            input_types=["Data"],
+            input_types=["Data", "JSON"],
         ),
     ]
 
@@ -390,7 +390,7 @@ class QueryModeDecider(Component):
         Output(name="query_mode_decision", display_name="Query Mode Decision", method="build_decision", types=["Data"]),
     ]
 
-    def build_decision(self) -> Any:
+    def build_decision(self) -> Data:
         decision = decide_query_mode(
             getattr(self, "intent", None),
             getattr(self, "agent_state", None),

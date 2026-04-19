@@ -4,6 +4,8 @@ This folder contains standalone Langflow custom components for the manufacturing
 
 The current implementation covers the Data Answer Flow from session/domain loading through query mode decision. Retrieval planning, data query execution, pandas analysis, and final answer generation are intentionally left for later phases.
 
+For the basic code-writing theory behind Langflow custom nodes, see `docs/16_LANGFLOW_CUSTOM_NODE_CODE_GUIDE.md`.
+
 ## Data Answer Flow Order
 
 Use these custom helper inputs when your Langflow build does not show a built-in multiline text input:
@@ -35,7 +37,7 @@ Then connect the custom components in this order:
 
 ## Wiring Contract
 
-All custom component-to-component links in this flow use Langflow `Data` ports. The helper input nodes do not need a value before wiring; if a link is disabled in the canvas, refresh/reload the custom components so Langflow re-reads the updated port metadata.
+All custom component-to-component links in this flow use Langflow `Data`/`JSON` ports. The helper input nodes do not need a value before wiring; if a link is disabled in the canvas, refresh/reload the custom components so Langflow re-reads the updated port metadata.
 
 Recommended connections:
 
@@ -111,17 +113,16 @@ Request Type Router.data_question
 Do not connect these for the current implementation:
 
 ```text
-Domain JSON Loader.domain -> Build Intent Prompt.domain
-Domain JSON Loader.domain -> Normalize Intent With Domain.domain
-Domain JSON Loader.domain -> Query Mode Decider.domain
 LLM JSON Caller.llm_text -> Parse Intent JSON.llm_text
 ```
 
-Those names are accepted only as defensive fallbacks in some nodes or are advanced/manual fields, but the implemented Langflow outputs are `domain_payload`, `domain_index`, and `llm_result`.
+`Domain JSON Loader` intentionally exposes only `domain_payload` and `domain_index` as visible outputs. `domain_payload` already contains the full domain and index, so the separate `domain_index` links are recommended for clarity but not required for execution.
+
+`LLM JSON Caller.llm_text` is accepted only as a defensive/manual fallback in `Parse Intent JSON`; the implemented Langflow output is `llm_result`.
 
 You can still skip `00_domain_json_input.py` or `00_previous_state_json_input.py` and type directly into `Domain JSON Loader.domain_json_text` or `Session State Loader.previous_state_json`. The helper input nodes are provided so the fields are visible as separate canvas nodes.
 
-Each LLM caller receives its own `llm_api_key`, `llm_base_url`, `model_name`, `temperature`, and `timeout_seconds` inputs. There is no shared LLM config node.
+Each LLM caller receives its own `llm_api_key`, `model_name`, `temperature`, `timeout_seconds`, and `api_version` inputs. There is no shared LLM config node, and the API-specific request code is isolated inside the caller so it can be adjusted for the target runtime.
 
 ## Domain JSON Sample
 

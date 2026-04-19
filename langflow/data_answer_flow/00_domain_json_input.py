@@ -95,7 +95,7 @@ class DomainJsonInput(Component):
         Output(name="domain_json_payload", display_name="Domain JSON Payload", method="build_payload", types=["Data"]),
     ]
 
-    def build_payload(self) -> Any:
+    def build_payload(self) -> Data:
         text = str(getattr(self, "domain_json_text", "") or "").strip()
         valid_json = False
         if text:

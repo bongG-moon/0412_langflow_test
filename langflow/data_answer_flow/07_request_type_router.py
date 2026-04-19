@@ -144,8 +144,18 @@ class RequestTypeRouter(Component):
     name = "RequestTypeRouter"
 
     inputs = [
-        DataInput(name="intent", display_name="Intent", info="Output from Normalize Intent With Domain.", input_types=["Data"]),
-        DataInput(name="agent_state", display_name="Agent State", info="Output from Session State Loader.", input_types=["Data"]),
+        DataInput(
+            name="intent",
+            display_name="Intent",
+            info="Output from Normalize Intent With Domain.",
+            input_types=["Data", "JSON"],
+        ),
+        DataInput(
+            name="agent_state",
+            display_name="Agent State",
+            info="Output from Session State Loader.",
+            input_types=["Data", "JSON"],
+        ),
     ]
 
     outputs = [
@@ -164,15 +174,15 @@ class RequestTypeRouter(Component):
     def _payload(self) -> Dict[str, Any]:
         return route_request_type(getattr(self, "intent", None), getattr(self, "agent_state", None))
 
-    def build_route(self) -> Any:
+    def build_route(self) -> Data:
         payload = self._payload()
         return _make_data(payload, text=json.dumps(payload, ensure_ascii=False))
 
-    def data_question_branch(self) -> Any:
+    def data_question_branch(self) -> Data:
         payload = self._payload()
         return _make_data(payload, text=json.dumps(payload, ensure_ascii=False)) if payload["route"] == "data_question" else None
 
-    def process_execution_branch(self) -> Any:
+    def process_execution_branch(self) -> Data:
         payload = self._payload()
         return (
             _make_data(payload, text=json.dumps(payload, ensure_ascii=False))
@@ -180,6 +190,6 @@ class RequestTypeRouter(Component):
             else None
         )
 
-    def clarification_branch(self) -> Any:
+    def clarification_branch(self) -> Data:
         payload = self._payload()
         return _make_data(payload, text=json.dumps(payload, ensure_ascii=False)) if payload["route"] == "clarification" else None

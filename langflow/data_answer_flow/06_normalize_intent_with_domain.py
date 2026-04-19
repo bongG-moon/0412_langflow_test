@@ -306,20 +306,30 @@ class NormalizeIntentWithDomain(Component):
     name = "NormalizeIntentWithDomain"
 
     inputs = [
-        DataInput(name="intent_raw", display_name="Intent Raw", info="Output from Parse Intent JSON.", input_types=["Data"]),
+        DataInput(
+            name="intent_raw",
+            display_name="Intent Raw",
+            info="Output from Parse Intent JSON.",
+            input_types=["Data", "JSON"],
+        ),
         DataInput(
             name="domain_payload",
             display_name="Domain Payload",
             info="Domain Payload output from Domain JSON Loader.",
-            input_types=["Data"],
+            input_types=["Data", "JSON"],
         ),
         DataInput(
             name="domain_index",
             display_name="Domain Index",
             info="Optional Domain Index output from Domain JSON Loader.",
-            input_types=["Data"],
+            input_types=["Data", "JSON"],
         ),
-        DataInput(name="agent_state", display_name="Agent State", info="Output from Session State Loader.", input_types=["Data"]),
+        DataInput(
+            name="agent_state",
+            display_name="Agent State",
+            info="Output from Session State Loader.",
+            input_types=["Data", "JSON"],
+        ),
         MessageTextInput(name="user_question", display_name="User Question", info="Current user question."),
         MessageTextInput(
             name="reference_date",
@@ -334,7 +344,7 @@ class NormalizeIntentWithDomain(Component):
         Output(name="intent", display_name="Intent", method="build_intent", types=["Data"]),
     ]
 
-    def build_intent(self) -> Any:
+    def build_intent(self) -> Data:
         payload = normalize_intent_with_domain(
             getattr(self, "intent_raw", None),
             getattr(self, "domain_payload", None) or getattr(self, "domain", None),

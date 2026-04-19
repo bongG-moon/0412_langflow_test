@@ -95,7 +95,7 @@ class PreviousStateJsonInput(Component):
         Output(name="previous_state_payload", display_name="Previous State Payload", method="build_payload", types=["Data"]),
     ]
 
-    def build_payload(self) -> Any:
+    def build_payload(self) -> Data:
         text = str(getattr(self, "previous_state_json", "") or "").strip()
         valid_json = False
         if text:
