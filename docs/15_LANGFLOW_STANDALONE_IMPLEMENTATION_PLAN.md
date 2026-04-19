@@ -155,7 +155,7 @@ flowchart TD
     L4 --> O1["State Updater And Final Output"]
 ```
 
-LLM 설정은 별도 공통 config 노드로 만들지 않는다. 각 `LLM JSON Caller`와 `LLM Text Caller` 노드가 자기 input으로 `llm_api_key`, `model_name`, `temperature`, `timeout_seconds`, `api_version`을 직접 받는다. 현재 샘플 구현의 내부 요청 형식은 기존 LangGraph 설정에 맞춰 generateContent 계열 API를 사용하지만, 노드 표면의 이름은 실제 운영 환경에서 다른 LLM API로 교체하기 쉽도록 범용 명칭을 사용한다. 따라서 같은 flow 안에서도 intent 추출, retrieval planning, pandas code generation, answer generation에 서로 다른 모델명을 입력할 수 있다.
+LLM 설정은 별도 공통 config 노드로 만들지 않는다. 각 `LLM JSON Caller`와 `LLM Text Caller` 노드가 자기 input으로 `llm_api_key`, `model_name`, `temperature`, `timeout_seconds`를 직접 받는다. 현재 샘플 구현은 기존 LangGraph와 동일하게 `langchain_google_genai.ChatGoogleGenerativeAI` 기반으로 호출한다. 따라서 같은 flow 안에서도 intent 추출, retrieval planning, pandas code generation, answer generation에 서로 다른 모델명을 입력할 수 있다.
 
 ## 4. 표준 Payload
 
@@ -596,7 +596,6 @@ Phase 1에서는 Langflow Multiline Text Input으로 구현한다. 사용자가 
 - `model_name`
 - `temperature`
 - `timeout_seconds`
-- `api_version`
 
 역할:
 
@@ -612,8 +611,7 @@ Phase 1에서는 Langflow Multiline Text Input으로 구현한다. 사용자가 
   "llm_api_key": "...",
   "model_name": "your-model-name",
   "temperature": 0,
-  "timeout_seconds": 60,
-  "api_version": "v1beta"
+  "timeout_seconds": 60
 }
 ```
 
@@ -779,7 +777,6 @@ Prompt에 포함할 정보:
 - `model_name`
 - `temperature`
 - `timeout_seconds`
-- `api_version`
 
 역할:
 
@@ -800,9 +797,9 @@ Prompt에 포함할 정보:
 
 구현 방향:
 
-- node input으로 LLM API key, model name, temperature, timeout, API version을 받는다.
-- 현재 샘플 구현은 generateContent 계열 요청 형식을 사용한다.
-- JSON 지향 호출에서는 응답 형식을 JSON으로 제한하는 설정을 호출부에서 적용한다.
+- node input으로 LLM API key, model name, temperature, timeout을 받는다.
+- 현재 샘플 구현은 기존 LangGraph와 동일하게 `ChatGoogleGenerativeAI(model=..., google_api_key=..., temperature=...)` 형태를 사용한다.
+- JSON 지향 호출에서는 system message로 JSON만 반환하도록 지시한다.
 - Langflow 기본 LLM 노드를 사용할 수 있다면 이 노드는 생략 가능하지만, 설정을 한 곳에서 통제하려면 Custom Component가 낫다.
 
 #### 9. Parse Intent JSON
@@ -1329,7 +1326,6 @@ Prompt 원칙:
 - `model_name`
 - `temperature`
 - `timeout_seconds`
-- `api_version`
 
 역할:
 
@@ -1420,7 +1416,7 @@ Domain JSON Input
   -> Domain JSON Loader.domain_json_payload
 ```
 
-각 LLM Caller 노드는 공통 config 연결 없이 자기 input으로 `llm_api_key`, `model_name`, `temperature`, `timeout_seconds`, `api_version`을 받는다.
+각 LLM Caller 노드는 공통 config 연결 없이 자기 input으로 `llm_api_key`, `model_name`, `temperature`, `timeout_seconds`를 받는다.
 
 ### 7.2 질문 이해 연결
 
@@ -2085,7 +2081,7 @@ Langflow Phase 1 구현은 아래를 만족하면 완료로 본다.
 - 별도 Domain Authoring Flow에서 도메인 원문을 표준 Domain JSON으로 전처리할 수 있다.
 - Domain Authoring Flow가 저장 전 preview, warning, error, conflict를 보여준다.
 - Domain Authoring Flow가 MongoDB 저장용 payload를 만들 수 있다.
-- 각 LLM Caller 노드에 LLM API key, model name, API version을 직접 input으로 넣을 수 있다.
+- 각 LLM Caller 노드에 LLM API key, model name, temperature를 직접 input으로 넣을 수 있다.
 - 단일 dataset 질문에 답변할 수 있다.
 - dataset별 required param을 확인한다.
 - required param이 없으면 사용자에게 되묻는다.

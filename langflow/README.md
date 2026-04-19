@@ -122,7 +122,7 @@ LLM JSON Caller.llm_text -> Parse Intent JSON.llm_text
 
 You can still skip `00_domain_json_input.py` or `00_previous_state_json_input.py` and type directly into `Domain JSON Loader.domain_json_text` or `Session State Loader.previous_state_json`. The helper input nodes are provided so the fields are visible as separate canvas nodes.
 
-Each LLM caller receives its own `llm_api_key`, `model_name`, `temperature`, `timeout_seconds`, and `api_version` inputs. There is no shared LLM config node, and the API-specific request code is isolated inside the caller so it can be adjusted for the target runtime.
+Each LLM caller receives its own `llm_api_key`, `model_name`, `temperature`, and `timeout_seconds` inputs. There is no shared LLM config node. The current implementation calls `langchain_google_genai.ChatGoogleGenerativeAI`, matching the LangGraph implementation style.
 
 ## Domain JSON Sample
 
