@@ -7,11 +7,6 @@ from datetime import datetime, timedelta
 from importlib import import_module
 from typing import Any, Dict
 
-try:
-    from zoneinfo import ZoneInfo
-except Exception:  # pragma: no cover
-    ZoneInfo = None  # type: ignore
-
 
 def _load_attr(module_names: list[str], attr_name: str, fallback: Any) -> Any:
     for module_name in module_names:
@@ -143,8 +138,12 @@ def _today(reference_date: str = "") -> datetime:
             return datetime.strptime(reference_date, "%Y-%m-%d")
         except Exception:
             pass
-    if ZoneInfo is not None:
-        return datetime.now(ZoneInfo("Asia/Seoul")).replace(tzinfo=None)
+    try:
+        from zoneinfo import ZoneInfo as TimeZoneInfo
+
+        return datetime.now(TimeZoneInfo("Asia/Seoul")).replace(tzinfo=None)
+    except Exception:
+        pass
     return datetime.now()
 
 

@@ -500,6 +500,94 @@ MessageTextInput(
 
 우리 제조 분석 flow의 Phase 1에서는 노드를 tool로 쓰기보다 canvas 단계별 흐름을 명확히 보여주는 것이 우선이므로, Tool Mode는 당장 필수는 아니다.
 
+### 17.1 Tool Mode 예시
+
+아래 예시는 Agent가 필요할 때 호출할 수 있는 간단한 dataset 설명 조회 도구이다.
+
+핵심은 `dataset_key` 입력에 `tool_mode=True`가 붙어 있다는 점이다. 이렇게 하면 Agent가 tool call을 만들 때 `dataset_key` 값을 argument로 채울 수 있다.
+
+```python
+from __future__ import annotations
+
+from lfx.custom import Component
+from lfx.io import MessageTextInput, Output
+from lfx.schema import Data
+
+
+DATASET_CATALOG = {
+    "production": {
+        "display_name": "생산 데이터",
+        "required_params": ["date"],
+        "columns": ["date", "product", "process", "line", "qty"],
+    },
+    "target": {
+        "display_name": "목표 데이터",
+        "required_params": ["date"],
+        "columns": ["date", "product", "process", "line", "target_qty"],
+    },
+}
+
+
+class DatasetCatalogTool(Component):
+    display_name = "Dataset Catalog Tool"
+    description = "Return dataset metadata by dataset key."
+    icon = "Database"
+    name = "DatasetCatalogTool"
+
+    inputs = [
+        MessageTextInput(
+            name="dataset_key",
+            display_name="Dataset Key",
+            info="Dataset key such as production or target.",
+            tool_mode=True,
+        ),
+    ]
+
+    outputs = [
+        Output(
+            name="dataset_info",
+            display_name="Dataset Info",
+            method="lookup_dataset",
+        ),
+    ]
+
+    def lookup_dataset(self) -> Data:
+        dataset_key = str(self.dataset_key or "").strip()
+        dataset = DATASET_CATALOG.get(dataset_key)
+        if not dataset:
+            return Data(
+                data={
+                    "found": False,
+                    "dataset_key": dataset_key,
+                    "available_dataset_keys": sorted(DATASET_CATALOG),
+                }
+            )
+
+        return Data(
+            data={
+                "found": True,
+                "dataset_key": dataset_key,
+                "dataset": dataset,
+            }
+        )
+```
+
+Agent가 이 tool을 사용할 수 있는 상황은 다음과 같다.
+
+```text
+User: 생산량을 조회하려면 어떤 파라미터가 필요해?
+Agent: Dataset Catalog Tool을 dataset_key=production으로 호출
+Tool Result: production 데이터는 date 필수 파라미터와 qty 컬럼을 가진다.
+```
+
+Tool Mode를 쓸 때 주의할 점은 다음과 같다.
+
+- tool argument로 받을 입력에만 `tool_mode=True`를 붙인다.
+- API key, 내부 debug flag, 큰 JSON payload처럼 Agent가 직접 채우면 안 되는 값에는 붙이지 않는다.
+- output method 반환 타입은 여전히 `-> Data`처럼 명확하게 적는다.
+- tool 설명인 `description`, input의 `display_name`, `info`를 구체적으로 작성해야 Agent가 올바른 argument를 넣기 쉽다.
+- 너무 큰 결과를 반환하면 Agent가 다음 reasoning에서 사용하기 어려우므로 필요한 정보만 반환한다.
+
 ## 18. Stand Alone 노드 작성 원칙
 
 우리 Langflow 구현은 Stand Alone 방식을 목표로 한다.
@@ -586,6 +674,331 @@ Router/Decider
 ```
 
 이 구조를 유지하면 Langflow canvas에서 각 노드의 역할을 눈으로 따라가기 쉽다.
+
+아래는 같은 내용을 조금 더 쉽게 풀어쓴 설명이다.
+
+### 20.1 Input Node
+
+Input Node는 사용자가 직접 넣는 값을 Langflow 연결용 `Data`로 포장하는 노드이다.
+
+예를 들어 `Previous State JSON Input`은 사용자가 이전 턴의 상태 JSON을 붙여넣으면, 다음 노드가 읽기 쉬운 이름을 붙여서 내보낸다.
+
+입력 예시:
+
+```text
+{"session_id":"default","turn_id":1,"chat_history":[]}
+```
+
+출력 예시:
+
+```python
+Data(
+    data={
+        "previous_state_json": "{\"session_id\":\"default\",\"turn_id\":1}",
+        "state_json": "{\"session_id\":\"default\",\"turn_id\":1}",
+        "is_empty": False,
+        "valid_json": True,
+    },
+    text="{\"session_id\":\"default\",\"turn_id\":1}",
+)
+```
+
+쉽게 말하면 Input Node는 "사용자가 넣은 원문을 다음 노드가 받을 수 있는 택배 상자에 담는 역할"이다.
+
+### 20.2 Loader Node
+
+Loader Node는 원문 또는 이전 노드 payload를 받아서 표준 구조로 정리한다.
+
+예를 들어 `Session State Loader`는 `previous_state_json` 문자열을 받아서 실제 dict state로 바꾼다.
+
+받는 정보 예시:
+
+```python
+{
+    "previous_state_json": "{\"session_id\":\"default\",\"turn_id\":1}",
+    "state_json": "{\"session_id\":\"default\",\"turn_id\":1}",
+}
+```
+
+반환 정보 예시:
+
+```python
+Data(
+    data={
+        "agent_state": {
+            "session_id": "default",
+            "turn_id": 2,
+            "chat_history": [],
+            "context": {},
+            "source_snapshots": {},
+            "current_data": None,
+            "pending_user_question": "오늘 A제품 생산량 알려줘",
+            "state_errors": [],
+        },
+        "state": {
+            "session_id": "default",
+            "turn_id": 2,
+            "chat_history": [],
+            "context": {},
+            "source_snapshots": {},
+            "current_data": None,
+            "pending_user_question": "오늘 A제품 생산량 알려줘",
+            "state_errors": [],
+        },
+    }
+)
+```
+
+Loader Node는 보통 다음 일을 한다.
+
+- JSON 문자열을 dict로 바꾼다.
+- 빠진 필드에 기본값을 채운다.
+- 다음 노드들이 항상 같은 key를 볼 수 있게 표준 이름을 만든다.
+
+### 20.3 Prompt Builder
+
+Prompt Builder는 여러 payload를 모아서 LLM에게 보낼 질문지를 만든다.
+
+예를 들어 `Build Intent Prompt`는 아래 정보를 받는다.
+
+```text
+사용자 질문: 오늘 A제품 생산량 알려줘
+agent_state: 이전 대화 상태
+domain_payload: 제품, 공정, 데이터셋, 지표 정의
+domain_index: alias 검색용 index
+```
+
+반환 정보 예시:
+
+```python
+Data(
+    data={
+        "intent_prompt": """
+        You are extracting manufacturing data question intent.
+        User question: 오늘 A제품 생산량 알려줘
+        Available datasets: production, target
+        Available products: A, B
+        Return JSON only...
+        """,
+        "prompt": """
+        You are extracting manufacturing data question intent.
+        ...
+        """,
+    },
+    text="You are extracting manufacturing data question intent...",
+)
+```
+
+Prompt Builder가 중요한 이유는 LLM 호출 코드를 단순하게 만들기 위해서다. LLM Caller는 prompt를 어떻게 만들었는지 몰라도 되고, 그냥 `prompt` 문자열만 받아 호출하면 된다.
+
+### 20.4 LLM Caller
+
+LLM Caller는 prompt를 실제 모델에 보내고, 모델이 준 텍스트를 다시 `Data`로 포장한다.
+
+받는 정보 예시:
+
+```python
+{
+    "prompt": "User question: 오늘 A제품 생산량 알려줘\nReturn JSON only..."
+}
+```
+
+노드 설정 예시:
+
+```text
+llm_api_key = ...
+model_name = gemini-flash-latest
+temperature = 0
+```
+
+반환 정보 예시:
+
+```python
+Data(
+    data={
+        "llm_text": """
+        {
+          "request_type": "data_question",
+          "dataset_hints": ["production"],
+          "metric_hints": ["production_qty"],
+          "required_params": {"date": "2026-04-19"},
+          "filters": {"product": "A"}
+        }
+        """,
+        "llm_debug": {
+            "provider": "langchain_google_genai",
+            "model_name": "gemini-flash-latest",
+            "prompt_chars": 1200,
+            "ok": True,
+        },
+    }
+)
+```
+
+LLM Caller는 가능하면 생각을 많이 하지 않는다.
+
+- prompt를 읽는다.
+- API key와 model name으로 LLM을 호출한다.
+- 응답 텍스트를 반환한다.
+- 실패하면 `llm_debug.error`에 이유를 넣는다.
+
+### 20.5 Parser / Normalizer
+
+Parser는 LLM이 준 문자열을 JSON dict로 바꾼다.
+
+Normalizer는 LLM 결과를 도메인 규칙과 합쳐 더 정확한 표준 payload로 만든다.
+
+예를 들어 `Parse Intent JSON`은 이런 문자열을 받는다.
+
+```json
+{
+  "request_type": "data_question",
+  "dataset_hints": ["production"],
+  "filters": {"product": "A"}
+}
+```
+
+그리고 이렇게 반환한다.
+
+```python
+Data(
+    data={
+        "intent_raw": {
+            "request_type": "data_question",
+            "dataset_hints": ["production"],
+            "filters": {"product": "A"},
+        },
+        "parse_errors": [],
+    }
+)
+```
+
+그 다음 `Normalize Intent With Domain`은 사용자 질문과 도메인 index를 다시 보고 보정한다.
+
+받는 정보 예시:
+
+```text
+intent_raw: LLM이 만든 초안
+domain_payload: 제품 A, 생산 데이터, 생산량 metric 정의
+domain_index: "A제품" -> product A, "생산량" -> production_qty
+agent_state: 이전 대화 상태
+user_question: 오늘 A제품 생산량 알려줘
+```
+
+반환 정보 예시:
+
+```python
+Data(
+    data={
+        "intent": {
+            "request_type": "data_question",
+            "dataset_hints": ["production"],
+            "metric_hints": ["production_qty"],
+            "required_params": {"date": "2026-04-19"},
+            "filters": {"product": "A"},
+            "required_datasets": ["production"],
+            "normalization_notes": [
+                "product alias 'A제품' -> A",
+                "metric alias '생산량' -> production_qty",
+            ],
+        }
+    }
+)
+```
+
+Parser / Normalizer는 LLM이 애매하게 준 결과를 실제 시스템이 쓰기 좋은 모양으로 다듬는 단계이다.
+
+### 20.6 Router / Decider
+
+Router 또는 Decider는 다음으로 어느 노드에 가야 하는지 결정한다.
+
+예를 들어 `Request Type Router`는 `intent.request_type`을 보고 질문이 데이터 질문인지, 프로세스 실행 요청인지 나눈다.
+
+받는 정보 예시:
+
+```python
+{
+    "intent": {
+        "request_type": "data_question",
+        "dataset_hints": ["production"],
+        "filters": {"product": "A"},
+    }
+}
+```
+
+반환 정보 예시:
+
+```python
+Data(
+    data={
+        "route": "data_question",
+        "intent": {
+            "request_type": "data_question",
+            "dataset_hints": ["production"],
+            "filters": {"product": "A"},
+        },
+        "agent_state": {...},
+    }
+)
+```
+
+`Query Mode Decider`는 데이터 질문 안에서도 새 조회가 필요한지, 기존 데이터를 재사용할 수 있는지 판단한다.
+
+반환 정보 예시:
+
+```python
+Data(
+    data={
+        "query_mode": "retrieval",
+        "reason": "date required parameter is new or missing in current source snapshot",
+        "reuse_source_snapshot": False,
+        "required_params": {"date": "2026-04-19"},
+    }
+)
+```
+
+Router / Decider는 데이터를 크게 바꾸는 노드가 아니라 "다음 길을 고르는 노드"라고 이해하면 된다.
+
+### 20.7 한 질문이 지나가는 전체 예시
+
+사용자 질문:
+
+```text
+오늘 A제품 생산량 알려줘
+```
+
+노드를 지나며 정보는 대략 이렇게 바뀐다.
+
+```text
+Chat Input
+  -> "오늘 A제품 생산량 알려줘"
+
+Session State Loader
+  -> {"agent_state": {"pending_user_question": "오늘 A제품 생산량 알려줘", ...}}
+
+Domain JSON Loader
+  -> {"domain": {...}, "domain_index": {...}}
+
+Build Intent Prompt
+  -> {"prompt": "질문과 도메인 정보를 보고 intent JSON을 만들어라..."}
+
+LLM JSON Caller
+  -> {"llm_text": "{\"request_type\":\"data_question\", ...}"}
+
+Parse Intent JSON
+  -> {"intent_raw": {"request_type": "data_question", ...}}
+
+Normalize Intent With Domain
+  -> {"intent": {"required_params": {"date": "2026-04-19"}, "filters": {"product": "A"}, ...}}
+
+Request Type Router
+  -> {"route": "data_question", "intent": {...}}
+
+Query Mode Decider
+  -> {"query_mode": "retrieval", "reason": "새 원본 데이터 조회 필요"}
+```
+
+이렇게 보면 각 노드는 "완성된 답변"을 만들기보다, 다음 노드가 더 쉽게 일하도록 정보를 조금씩 정리해 넘기는 역할을 한다.
 
 ## 21. 연결이 안 될 때 확인할 체크리스트
 
