@@ -6,6 +6,14 @@ from importlib import import_module
 from typing import Any, Dict
 
 
+# NOTE FOR CONFIRMED LFX LANGFLOW RUNTIME:
+# The `_load_attr` function, `_Fallback*` classes, and `_make_input` helper below
+# are compatibility scaffolding for standalone local tests or mixed Langflow
+# versions. In the actual lfx-based Langflow environment, this block is not
+# required and can be replaced with direct imports such as:
+#   from lfx.custom import Component
+#   from lfx.io import DataInput, MessageTextInput, Output
+#   from lfx.schema import Data
 def _load_attr(module_names: list[str], attr_name: str, fallback: Any) -> Any:
     for module_name in module_names:
         try:
@@ -56,6 +64,8 @@ def _make_input(**kwargs: Any) -> _FallbackInput:
     return _FallbackInput(**kwargs)
 
 
+# In the actual lfx Langflow runtime, these resolve to real Langflow classes.
+# The fallback argument is only used outside Langflow or when import paths differ.
 Component = _load_attr(
     ["lfx.custom.custom_component.component", "lfx.custom", "langflow.custom"],
     "Component",
