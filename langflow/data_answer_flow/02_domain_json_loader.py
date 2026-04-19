@@ -151,26 +151,25 @@ def _parse_domain_json(domain_json_text: Any) -> tuple[Dict[str, Any], list[str]
 def _normalize_domain_document(parsed: Dict[str, Any]) -> tuple[Dict[str, Any], list[str]]:
     errors: list[str] = []
     source = deepcopy(parsed)
+    metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
+    metadata = {key: value for key, value in metadata.items() if key != "timezone"}
     if isinstance(source.get("domain"), dict):
         domain = deepcopy(source["domain"])
         document = {
             "domain_id": source.get("domain_id") or "manufacturing_default",
-            "version": source.get("version") or "phase1-dev",
             "status": source.get("status") or "active",
-            "metadata": source.get("metadata") if isinstance(source.get("metadata"), dict) else {},
+            "metadata": metadata,
             "domain": domain,
         }
     else:
         domain = {key: deepcopy(source.get(key)) for key in ROOT_KEYS if key in source}
         document = {
             "domain_id": source.get("domain_id") or "manufacturing_default",
-            "version": source.get("version") or "phase1-dev",
             "status": source.get("status") or "active",
-            "metadata": source.get("metadata") if isinstance(source.get("metadata"), dict) else {},
+            "metadata": metadata,
             "domain": domain,
         }
 
-    document["metadata"].setdefault("timezone", "Asia/Seoul")
     domain = document["domain"]
     for key in ("products", "process_groups", "terms", "datasets", "metrics"):
         if not isinstance(domain.get(key), dict):
@@ -287,9 +286,8 @@ def load_domain_json(domain_json_text: Any) -> Dict[str, Any]:
     document, normalize_errors = _normalize_domain_document(parsed) if parsed else (
         {
             "domain_id": "manufacturing_default",
-            "version": "phase1-dev",
             "status": "active",
-            "metadata": {"timezone": "Asia/Seoul"},
+            "metadata": {},
             "domain": {
                 "products": {},
                 "process_groups": {},

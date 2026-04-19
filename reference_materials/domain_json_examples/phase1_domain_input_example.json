@@ -1,11 +1,9 @@
 {
   "domain_id": "manufacturing_default",
-  "version": "phase1-dev",
   "status": "active",
   "metadata": {
     "display_name": "제조 분석 기본 도메인",
-    "description": "Phase 1 더미 데이터 조회와 분석에 사용할 도메인 정의",
-    "timezone": "Asia/Seoul"
+    "description": "Phase 1 더미 데이터 조회와 분석에 사용할 도메인 정의"
   },
   "domain": {
     "products": {
