@@ -186,9 +186,13 @@ def _get_domain(value: Any) -> Dict[str, Any]:
     return domain if isinstance(domain, dict) else payload
 
 
-def _get_index(index_payload: Any) -> Dict[str, Any]:
+def _get_index(index_payload: Any, domain_payload: Any = None) -> Dict[str, Any]:
     payload = _payload_from_value(index_payload)
     index = payload.get("domain_index")
+    if isinstance(index, dict):
+        return index
+    domain_payload_dict = _payload_from_value(domain_payload)
+    index = domain_payload_dict.get("domain_index")
     return index if isinstance(index, dict) else {}
 
 
@@ -208,7 +212,7 @@ def normalize_intent_with_domain(
 ) -> Dict[str, Any]:
     intent = _get_intent(intent_raw)
     domain = _get_domain(domain_payload)
-    domain_index = _get_index(domain_index_payload)
+    domain_index = _get_index(domain_index_payload, domain_payload)
     agent_state = _get_state(agent_state_payload)
     question = str(user_question or agent_state.get("pending_user_question") or "")
     notes: list[str] = []

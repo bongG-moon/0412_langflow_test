@@ -133,10 +133,12 @@ def _extract_json_text(value: Any) -> str:
         return value.strip()
     payload = _payload_from_value(value)
     if payload:
-        for key in ("domain_json_text", "domain_json", "text"):
-            if isinstance(payload.get(key), str):
-                return payload[key].strip()
+        if isinstance(payload.get("domain_json_text"), str):
+            return payload["domain_json_text"].strip()
         return json.dumps(payload, ensure_ascii=False)
+    text = getattr(value, "text", None)
+    if isinstance(text, str):
+        return text.strip()
     return str(value or "").strip()
 
 
@@ -161,7 +163,6 @@ def _normalize_domain_document(parsed: Dict[str, Any]) -> tuple[Dict[str, Any], 
     errors: list[str] = []
     source = deepcopy(parsed)
     metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
-    metadata = {key: value for key, value in metadata.items() if key != "timezone"}
     if isinstance(source.get("domain"), dict):
         domain = deepcopy(source["domain"])
         document = {
@@ -357,27 +358,24 @@ class DomainJsonLoader(Component):
         domain_payload = {
             "domain_document": payload["domain_document"],
             "domain": payload["domain"],
+            "domain_index": payload["domain_index"],
             "domain_errors": payload["domain_errors"],
         }
-        return _make_data(domain_payload, text=json.dumps(domain_payload, ensure_ascii=False))
+        return _make_data(domain_payload)
 
     def build_domain(self) -> Data:
         source = getattr(self, "domain_json_payload", None)
         payload = load_domain_json(source)
-        return _make_data({"domain": payload["domain"]}, text=json.dumps(payload["domain"], ensure_ascii=False))
+        return _make_data({"domain": payload["domain"]})
 
     def build_domain_index(self) -> Data:
         source = getattr(self, "domain_json_payload", None)
         payload = load_domain_json(source)
         return _make_data(
             {"domain_index": payload["domain_index"], "domain_errors": payload["domain_errors"]},
-            text=json.dumps(payload["domain_index"], ensure_ascii=False),
         )
 
     def build_domain_document(self) -> Data:
         source = getattr(self, "domain_json_payload", None)
         payload = load_domain_json(source)
-        return _make_data(
-            {"domain_document": payload["domain_document"]},
-            text=json.dumps(payload["domain_document"], ensure_ascii=False),
-        )
+        return _make_data({"domain_document": payload["domain_document"]})

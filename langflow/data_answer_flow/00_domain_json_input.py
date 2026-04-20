@@ -116,7 +116,6 @@ class DomainJsonInput(Component):
                 valid_json = False
         payload = {
             "domain_json_text": text,
-            "domain_json": text,
             "is_empty": not bool(text),
             "valid_json": valid_json,
         }

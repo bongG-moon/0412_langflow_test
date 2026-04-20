@@ -56,8 +56,8 @@ Connections to build:
 | `Domain JSON Loader.domain_payload` | `Build Intent Prompt.domain_payload` | Yes |
 | `Domain JSON Loader.domain_payload` | `Normalize Intent With Domain.domain_payload` | Yes |
 | `Domain JSON Loader.domain_payload` | `Query Mode Decider.domain_payload` | Yes |
-| `Domain JSON Loader.domain_index` | `Build Intent Prompt.domain_index` | Yes |
-| `Domain JSON Loader.domain_index` | `Normalize Intent With Domain.domain_index` | Yes |
+| `Domain JSON Loader.domain_index` | `Build Intent Prompt.domain_index` | Optional |
+| `Domain JSON Loader.domain_index` | `Normalize Intent With Domain.domain_index` | Optional |
 | `Build Intent Prompt.intent_prompt` | `LLM JSON Caller.prompt` | Yes |
 | `LLM JSON Caller.llm_result` | `Parse Intent JSON.llm_result` | Yes |
 | `Parse Intent JSON.intent_raw` | `Normalize Intent With Domain.intent_raw` | Yes |
@@ -92,6 +92,10 @@ Domain JSON Loader.domain_index
   -> Build Intent Prompt.domain_index
   -> Normalize Intent With Domain.domain_index
 
+Note: `domain_payload` also includes `domain_index` as a fallback. If a
+Langflow version drops a custom component multi-output edge after execution,
+the flow can still run with only the `domain_payload` connections above.
+
 Build Intent Prompt.intent_prompt
   -> LLM JSON Caller.prompt
 
@@ -116,7 +120,7 @@ Do not connect these for the current implementation:
 LLM JSON Caller.llm_text -> Parse Intent JSON.llm_text
 ```
 
-`Domain JSON Loader` intentionally exposes `domain_payload` and `domain_index` as separate visible outputs. `domain_payload` carries the domain document and detailed domain definitions; `domain_index` carries the alias lookup dictionaries used by the prompt and normalization nodes. Connect both outputs explicitly.
+`Domain JSON Loader` exposes `domain_payload` and `domain_index` as separate visible outputs. `domain_payload` carries the domain document, detailed domain definitions, and a `domain_index` fallback. `domain_index` remains available as a visible helper output, but the downstream flow can run with the `domain_payload` connection alone.
 
 `LLM JSON Caller.llm_text` is accepted only as a defensive/manual fallback in `Parse Intent JSON`; the implemented Langflow output is `llm_result`.
 

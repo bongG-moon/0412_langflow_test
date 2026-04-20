@@ -25,9 +25,13 @@
 {
   "domain_document": {},
   "domain": {},
+  "domain_index": {},
   "domain_errors": []
 }
 ```
+
+`domain_index` is intentionally included here as a fallback for Langflow
+versions that may drop a custom component multi-output edge after execution.
 
 `domain_index`는 다음 구조다.
 
@@ -175,12 +179,13 @@ payload = _payload_from_value(value)
 Data 객체라면 payload를 추출한다.
 
 ```python
-for key in ("domain_json_text", "domain_json", "text"):
-    if isinstance(payload.get(key), str):
-        return payload[key].strip()
+if isinstance(payload.get("domain_json_text"), str):
+    return payload["domain_json_text"].strip()
 ```
 
-payload 안에서 JSON 문자열이 들어 있을 가능성이 높은 key를 순서대로 찾는다.
+payload 안에서 표준 key인 `domain_json_text`를 찾는다.
+
+현재 flow에서는 `Domain JSON Input`이 이 key만 출력한다. 다른 flow가 이미 dict 형태의 domain document를 넘기는 경우에는 아래의 `json.dumps(payload, ensure_ascii=False)` 경로로 처리된다.
 
 ```python
 return json.dumps(payload, ensure_ascii=False)
@@ -257,10 +262,9 @@ source = deepcopy(parsed)
 
 ```python
 metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
-metadata = {key: value for key, value in metadata.items() if key != "timezone"}
 ```
 
-metadata가 dict면 사용하고, 아니면 빈 dict로 둔다. `timezone`은 프로젝트에서 제거하기로 했으므로 제외한다.
+metadata가 dict면 사용하고, 아니면 빈 dict로 둔다. 도메인 JSON에서는 timezone을 넣지 않는 것을 기본 방향으로 두며, 이 노드가 별도로 timezone key를 제거하지는 않는다.
 
 ```python
 if isinstance(source.get("domain"), dict):
@@ -567,7 +571,8 @@ alias 검색과 정규화에 사용할 domain index를 출력한다.
 def build_domain_payload(self) -> Data:
 ```
 
-입력을 읽고 `load_domain_json()`을 실행한 뒤 `domain_document`, `domain`, `domain_errors`만 반환한다.
+입력을 읽고 `load_domain_json()`을 실행한 뒤 `domain_document`, `domain`, `domain_index`, `domain_errors`를 반환한다.
+`domain_index`는 별도 output으로도 제공되지만, multi-output 연결이 풀리는 Langflow 환경을 대비한 fallback으로 `domain_payload`에도 같이 담는다.
 
 ```python
 def build_domain_index(self) -> Data:

@@ -709,7 +709,7 @@ Custom Component로 구현한다.
 - 입력이 `{"products": {...}, "datasets": {...}}` 같은 bare domain 구조이면 wrapper를 자동 생성한다.
 - `domain_id`가 없으면 `manufacturing_default`를 넣는다.
 - `status`가 없으면 `active`를 넣는다.
-- `metadata.timezone`은 사용하지 않는다. 시간대가 필요한 처리는 flow 내부에서 `Asia/Seoul` 기준으로 고정한다.
+- 도메인 JSON에는 `metadata.timezone`을 넣지 않는 것을 기본 방향으로 한다. 시간대가 필요한 처리는 flow 내부에서 `Asia/Seoul` 기준으로 고정한다.
 - dataset의 `required_params`가 없으면 빈 list로 처리한다.
 - `metrics.required_datasets`가 없으면 빈 list로 처리하되 validation warning을 남긴다.
 - 필수 root key인 `products`, `process_groups`, `terms`, `datasets`, `metrics`, `join_rules`가 없으면 빈 dict/list를 채운다.
@@ -1444,8 +1444,8 @@ Domain JSON Input
 | `Domain JSON Loader.domain_payload` | `Build Intent Prompt.domain_payload` | Yes |
 | `Domain JSON Loader.domain_payload` | `Normalize Intent With Domain.domain_payload` | Yes |
 | `Domain JSON Loader.domain_payload` | `Query Mode Decider.domain_payload` | Yes |
-| `Domain JSON Loader.domain_index` | `Build Intent Prompt.domain_index` | Yes |
-| `Domain JSON Loader.domain_index` | `Normalize Intent With Domain.domain_index` | Yes |
+| `Domain JSON Loader.domain_index` | `Build Intent Prompt.domain_index` | Optional |
+| `Domain JSON Loader.domain_index` | `Normalize Intent With Domain.domain_index` | Optional |
 | `Build Intent Prompt.intent_prompt` | `LLM JSON Caller.prompt` | Yes |
 | `LLM JSON Caller.llm_result` | `Parse Intent JSON.llm_result` | Yes |
 | `Parse Intent JSON.intent_raw` | `Normalize Intent With Domain.intent_raw` | Yes |
@@ -1466,6 +1466,8 @@ Domain JSON Loader.domain_payload
 Domain JSON Loader.domain_index
   -> Build Intent Prompt.domain_index
   -> Normalize Intent With Domain.domain_index
+
+Note: `domain_payload` also carries `domain_index` as a fallback. If Langflow drops a custom component multi-output edge after execution, the flow can still run with the `domain_payload` connections.
 
 Build Intent Prompt.intent_prompt
   -> LLM JSON Caller.prompt

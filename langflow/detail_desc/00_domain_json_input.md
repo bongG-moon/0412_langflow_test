@@ -13,13 +13,14 @@
 ```json
 {
   "domain_json_text": "{...}",
-  "domain_json": "{...}",
   "is_empty": false,
   "valid_json": true
 }
 ```
 
-`domain_json_text`와 `domain_json`은 같은 문자열을 담는다. 이름이 두 개 있는 이유는 뒤 노드나 향후 다른 flow에서 어느 key를 쓰더라도 호환되게 하기 위해서다.
+`domain_json_text`는 사용자가 붙여 넣은 원본 Domain JSON 문자열이다. 중복을 줄이기 위해 이 입력 노드는 표준 key로 `domain_json_text`만 출력한다.
+
+뒤 노드인 `Domain JSON Loader`는 다른 flow와의 호환을 위해 `domain_json`, `text` key도 fallback으로 읽을 수 있지만, 이 노드에서는 만들지 않는다.
 
 ## import 영역
 
@@ -257,7 +258,6 @@ if text:
 ```python
 payload = {
     "domain_json_text": text,
-    "domain_json": text,
     "is_empty": not bool(text),
     "valid_json": valid_json,
 }
@@ -265,7 +265,7 @@ payload = {
 
 뒤 노드로 넘길 표준 payload를 만든다.
 
-`is_empty`는 입력이 비어 있는지 여부다. `valid_json`은 JSON 파싱 가능 여부다.
+`domain_json_text`는 입력 원문이다. `is_empty`는 입력이 비어 있는지 여부다. `valid_json`은 JSON 파싱 가능 여부다.
 
 ```python
 return _make_data(payload, text=text)

@@ -256,10 +256,12 @@ domain payload에서 실제 `domain` dict를 꺼낸다. 없으면 payload 자체
 index_payload = _payload_from_value(domain_index_payload)
 domain_index = index_payload.get("domain_index")
 if not isinstance(domain_index, dict):
+    domain_index = domain_full_payload.get("domain_index")
+if not isinstance(domain_index, dict):
     domain_index = {}
 ```
 
-domain index payload에서 `domain_index`를 꺼낸다. 없으면 빈 dict로 둔다.
+domain index payload에서 `domain_index`를 꺼낸다. 없으면 `domain_payload` 안의 `domain_index`를 fallback으로 확인한다. 그래도 없으면 빈 dict로 둔다.
 
 ```python
 context = agent_state.get("context", {}) if isinstance(agent_state, dict) else {}

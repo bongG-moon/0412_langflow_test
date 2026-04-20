@@ -142,12 +142,12 @@ def _domain_summary(domain: Dict[str, Any], domain_index: Dict[str, Any]) -> Dic
         }
 
     return {
+        "alias_index": domain_index,
         "datasets": datasets,
         "metrics": metrics,
         "products": domain.get("products", {}),
         "process_groups": domain.get("process_groups", {}),
         "terms": domain.get("terms", {}),
-        "alias_index": domain_index,
     }
 
 
@@ -169,6 +169,8 @@ def build_intent_prompt(
 
     index_payload = _payload_from_value(domain_index_payload)
     domain_index = index_payload.get("domain_index")
+    if not isinstance(domain_index, dict):
+        domain_index = domain_full_payload.get("domain_index")
     if not isinstance(domain_index, dict):
         domain_index = {}
 
