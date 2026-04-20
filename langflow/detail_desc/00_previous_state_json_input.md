@@ -92,14 +92,14 @@ Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", 
 ## Data 생성 함수
 
 ```python
-def _make_data(payload: Dict[str, Any], text: str | None = None) -> Any:
+def _make_data(payload: Dict[str, Any]) -> Any:
 ```
 
 payload dict를 Langflow `Data`로 바꾸는 helper다.
 
 ```python
 try:
-    return Data(data=payload, text=text)
+    return Data(data=payload)
 ```
 
 먼저 최신 또는 일반적인 생성 방식을 시도한다.
@@ -114,7 +114,7 @@ except TypeError:
 
 ```python
     except Exception:
-        return _FallbackData(data=payload, text=text)
+        return _FallbackData(data=payload)
 ```
 
 실패하면 fallback Data 객체를 반환한다.
@@ -214,7 +214,7 @@ payload = {
 `previous_state_json`은 의미가 명확한 이름이고, `state_json`은 더 짧은 호환용 이름이다.
 
 ```python
-return _make_data(payload, text=text)
+return _make_data(payload)
 ```
 
 payload를 Langflow `Data`로 감싸 반환한다.

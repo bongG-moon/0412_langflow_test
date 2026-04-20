@@ -52,12 +52,9 @@ Connections to build:
 | `Session State Loader.agent_state` | `Build Intent Prompt.agent_state` | Yes |
 | `Session State Loader.agent_state` | `Normalize Intent With Domain.agent_state` | Yes |
 | `Session State Loader.agent_state` | `Request Type Router.agent_state` | Yes |
-| `Session State Loader.agent_state` | `Query Mode Decider.agent_state` | Optional |
 | `Domain JSON Loader.domain_payload` | `Build Intent Prompt.domain_payload` | Yes |
 | `Domain JSON Loader.domain_payload` | `Normalize Intent With Domain.domain_payload` | Yes |
 | `Domain JSON Loader.domain_payload` | `Query Mode Decider.domain_payload` | Yes |
-| `Domain JSON Loader.domain_index` | `Build Intent Prompt.domain_index` | Optional |
-| `Domain JSON Loader.domain_index` | `Normalize Intent With Domain.domain_index` | Optional |
 | `Build Intent Prompt.intent_prompt` | `LLM JSON Caller.prompt` | Yes |
 | `LLM JSON Caller.llm_result` | `Parse Intent JSON.llm_result` | Yes |
 | `Parse Intent JSON.intent_raw` | `Normalize Intent With Domain.intent_raw` | Yes |
@@ -88,14 +85,6 @@ Domain JSON Loader.domain_payload
   -> Normalize Intent With Domain.domain_payload
   -> Query Mode Decider.domain_payload
 
-Domain JSON Loader.domain_index
-  -> Build Intent Prompt.domain_index
-  -> Normalize Intent With Domain.domain_index
-
-Note: `domain_payload` also includes `domain_index` as a fallback. If a
-Langflow version drops a custom component multi-output edge after execution,
-the flow can still run with only the `domain_payload` connections above.
-
 Build Intent Prompt.intent_prompt
   -> LLM JSON Caller.prompt
 
@@ -120,7 +109,7 @@ Do not connect these for the current implementation:
 LLM JSON Caller.llm_text -> Parse Intent JSON.llm_text
 ```
 
-`Domain JSON Loader` exposes `domain_payload` and `domain_index` as separate visible outputs. `domain_payload` carries the domain document, detailed domain definitions, and a `domain_index` fallback. `domain_index` remains available as a visible helper output, but the downstream flow can run with the `domain_payload` connection alone.
+`Domain JSON Loader` exposes only `domain_payload` as a visible output. `domain_payload` carries the domain document, detailed domain definitions, `domain_index`, and any domain parsing errors. Downstream nodes read `domain_index` from this payload, so no separate `domain_index` edge is needed.
 
 `LLM JSON Caller.llm_text` is accepted only as a defensive/manual fallback in `Parse Intent JSON`; the implemented Langflow output is `llm_result`.
 

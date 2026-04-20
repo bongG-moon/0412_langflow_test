@@ -77,14 +77,14 @@ Output = _load_attr(["lfx.io", "langflow.io"], "Output", _FallbackOutput)
 Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", _FallbackData)
 
 
-def _make_data(payload: Dict[str, Any], text: str | None = None) -> Any:
+def _make_data(payload: Dict[str, Any]) -> Any:
     try:
-        return Data(data=payload, text=text)
+        return Data(data=payload)
     except TypeError:
         try:
             return Data(payload)
         except Exception:
-            return _FallbackData(data=payload, text=text)
+            return _FallbackData(data=payload)
 
 
 def _payload_from_value(value: Any) -> Dict[str, Any]:
@@ -155,7 +155,6 @@ def build_intent_prompt(
     user_question: str,
     agent_state_payload: Any,
     domain_payload: Any,
-    domain_index_payload: Any,
 ) -> str:
     state_payload = _payload_from_value(agent_state_payload)
     agent_state = state_payload.get("agent_state")
@@ -167,10 +166,7 @@ def build_intent_prompt(
     if not isinstance(domain, dict):
         domain = domain_full_payload
 
-    index_payload = _payload_from_value(domain_index_payload)
-    domain_index = index_payload.get("domain_index")
-    if not isinstance(domain_index, dict):
-        domain_index = domain_full_payload.get("domain_index")
+    domain_index = domain_full_payload.get("domain_index")
     if not isinstance(domain_index, dict):
         domain_index = {}
 
@@ -247,12 +243,6 @@ class BuildIntentPrompt(Component):
             info="Domain Payload output from Domain JSON Loader.",
             input_types=["Data", "JSON"],
         ),
-        DataInput(
-            name="domain_index",
-            display_name="Domain Index",
-            info="Domain Index output from Domain JSON Loader.",
-            input_types=["Data", "JSON"],
-        ),
     ]
 
     outputs = [
@@ -264,6 +254,5 @@ class BuildIntentPrompt(Component):
             getattr(self, "user_question", ""),
             getattr(self, "agent_state", None),
             getattr(self, "domain_payload", None) or getattr(self, "domain", None),
-            getattr(self, "domain_index", None),
         )
-        return _make_data({"intent_prompt": prompt, "prompt": prompt}, text=prompt)
+        return _make_data({"intent_prompt": prompt, "prompt": prompt})

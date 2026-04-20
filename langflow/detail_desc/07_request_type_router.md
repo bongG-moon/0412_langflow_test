@@ -250,7 +250,7 @@ Component input을 읽어 route_request_type 결과를 반환한다.
 ```python
 def build_route(self) -> Data:
     payload = self._payload()
-    return _make_data(payload, text=json.dumps(payload, ensure_ascii=False))
+return _make_data(payload)
 ```
 
 항상 route payload를 반환한다.
@@ -258,7 +258,7 @@ def build_route(self) -> Data:
 ```python
 def data_question_branch(self) -> Data:
     payload = self._payload()
-    return _make_data(payload, text=json.dumps(payload, ensure_ascii=False)) if payload["route"] == "data_question" else None
+return _make_data(payload) if payload["route"] == "data_question" else None
 ```
 
 data_question일 때만 Data를 반환한다. 아니면 `None`이다.

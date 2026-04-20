@@ -82,14 +82,14 @@ ROOT_KEYS = ("products", "process_groups", "terms", "datasets", "metrics", "join
 VALID_COLUMN_TYPES = {"string", "number", "date", "datetime", "boolean"}
 
 
-def _make_data(payload: Dict[str, Any], text: str | None = None) -> Any:
+def _make_data(payload: Dict[str, Any]) -> Any:
     try:
-        return Data(data=payload, text=text)
+        return Data(data=payload)
     except TypeError:
         try:
             return Data(payload)
         except Exception:
-            return _FallbackData(data=payload, text=text)
+            return _FallbackData(data=payload)
 
 
 def _payload_from_value(value: Any) -> Dict[str, Any]:
@@ -340,14 +340,6 @@ class DomainJsonLoader(Component):
             name="domain_payload",
             display_name="Domain Payload",
             method="build_domain_payload",
-            group_outputs=True,
-            types=["Data"],
-        ),
-        Output(
-            name="domain_index",
-            display_name="Domain Index",
-            method="build_domain_index",
-            group_outputs=True,
             types=["Data"],
         ),
     ]
@@ -367,13 +359,6 @@ class DomainJsonLoader(Component):
         source = getattr(self, "domain_json_payload", None)
         payload = load_domain_json(source)
         return _make_data({"domain": payload["domain"]})
-
-    def build_domain_index(self) -> Data:
-        source = getattr(self, "domain_json_payload", None)
-        payload = load_domain_json(source)
-        return _make_data(
-            {"domain_index": payload["domain_index"], "domain_errors": payload["domain_errors"]},
-        )
 
     def build_domain_document(self) -> Data:
         source = getattr(self, "domain_json_payload", None)

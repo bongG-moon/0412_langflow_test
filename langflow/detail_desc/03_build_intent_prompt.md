@@ -53,7 +53,7 @@ MessageTextInput = _load_attr(["lfx.io", "langflow.io"], "MessageTextInput", _ma
 
 `MessageTextInput`은 사용자 질문처럼 짧은 텍스트를 받는 데 사용한다.
 
-`DataInput`은 앞 노드의 `agent_state`, `domain_payload`, `domain_index`를 연결받는 데 사용한다.
+`DataInput`은 앞 노드의 `agent_state`, `domain_payload`를 연결받는 데 사용한다. `domain_index`는 `domain_payload` 안에서 꺼내 쓴다.
 
 ## payload 추출
 
@@ -228,7 +228,6 @@ def build_intent_prompt(
     user_question: str,
     agent_state_payload: Any,
     domain_payload: Any,
-    domain_index_payload: Any,
 ) -> str:
 ```
 
@@ -253,15 +252,12 @@ if not isinstance(domain, dict):
 domain payload에서 실제 `domain` dict를 꺼낸다. 없으면 payload 자체를 domain으로 본다.
 
 ```python
-index_payload = _payload_from_value(domain_index_payload)
-domain_index = index_payload.get("domain_index")
-if not isinstance(domain_index, dict):
-    domain_index = domain_full_payload.get("domain_index")
+domain_index = domain_full_payload.get("domain_index")
 if not isinstance(domain_index, dict):
     domain_index = {}
 ```
 
-domain index payload에서 `domain_index`를 꺼낸다. 없으면 `domain_payload` 안의 `domain_index`를 fallback으로 확인한다. 그래도 없으면 빈 dict로 둔다.
+`domain_payload` 안에서 `domain_index`를 꺼낸다. 없으면 빈 dict로 둔다.
 
 ```python
 context = agent_state.get("context", {}) if isinstance(agent_state, dict) else {}
@@ -329,12 +325,6 @@ DataInput(name="domain_payload", ...)
 
 `Domain JSON Loader.domain_payload`를 연결한다.
 
-```python
-DataInput(name="domain_index", ...)
-```
-
-`Domain JSON Loader.domain_index`를 연결한다.
-
 ## Component 출력
 
 ```python
@@ -356,7 +346,6 @@ prompt = build_intent_prompt(
     getattr(self, "user_question", ""),
     getattr(self, "agent_state", None),
     getattr(self, "domain_payload", None) or getattr(self, "domain", None),
-    getattr(self, "domain_index", None),
 )
 ```
 
@@ -365,7 +354,7 @@ Component input 값을 읽어 핵심 함수에 전달한다.
 `domain_payload`가 없을 때 `domain`을 fallback으로 보는 이유는 이전 구조와의 호환을 위한 방어 코드다.
 
 ```python
-return _make_data({"intent_prompt": prompt, "prompt": prompt}, text=prompt)
+return _make_data({"intent_prompt": prompt, "prompt": prompt})
 ```
 
 prompt를 `intent_prompt`와 `prompt` 두 key로 넣어 반환한다.

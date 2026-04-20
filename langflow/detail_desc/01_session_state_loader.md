@@ -398,10 +398,10 @@ state = load_session_state(
 핵심 함수로 이번 턴 state를 생성한다.
 
 ```python
-return _make_data({"agent_state": state, "state": state}, text=json.dumps(state, ensure_ascii=False))
+return _make_data({"agent_state": state, "state": state})
 ```
 
-`agent_state`와 `state` 두 이름으로 같은 state를 담아 반환한다. `.text`에는 사람이 확인하기 좋은 JSON 문자열을 넣는다.
+`agent_state`와 `state` 두 이름으로 같은 state를 담아 반환한다. 중복을 줄이기 위해 `.text`에는 별도 문자열을 넣지 않는다.
 
 ## 다음 노드 연결
 

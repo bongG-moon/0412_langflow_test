@@ -76,14 +76,14 @@ Output = _load_attr(["lfx.io", "langflow.io"], "Output", _FallbackOutput)
 Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", _FallbackData)
 
 
-def _make_data(payload: Dict[str, Any], text: str | None = None) -> Any:
+def _make_data(payload: Dict[str, Any]) -> Any:
     try:
-        return Data(data=payload, text=text)
+        return Data(data=payload)
     except TypeError:
         try:
             return Data(payload)
         except Exception:
-            return _FallbackData(data=payload, text=text)
+            return _FallbackData(data=payload)
 
 
 class PreviousStateJsonInput(Component):
@@ -120,4 +120,4 @@ class PreviousStateJsonInput(Component):
             "is_empty": not bool(text),
             "valid_json": valid_json,
         }
-        return _make_data(payload, text=text)
+        return _make_data(payload)

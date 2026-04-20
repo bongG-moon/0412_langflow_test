@@ -83,14 +83,14 @@ ChatGoogleGenerativeAI = _load_attr(
 )
 
 
-def _make_data(payload: Dict[str, Any], text: str | None = None) -> Any:
+def _make_data(payload: Dict[str, Any]) -> Any:
     try:
-        return Data(data=payload, text=text)
+        return Data(data=payload)
     except TypeError:
         try:
             return Data(payload)
         except Exception:
-            return _FallbackData(data=payload, text=text)
+            return _FallbackData(data=payload)
 
 
 def _payload_from_value(value: Any) -> Dict[str, Any]:
@@ -262,4 +262,4 @@ class LLMJsonCaller(Component):
             getattr(self, "temperature", "0"),
             getattr(self, "timeout_seconds", "60"),
         )
-        return _make_data(payload, text=payload.get("llm_text", ""))
+        return _make_data(payload)

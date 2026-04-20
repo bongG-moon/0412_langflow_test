@@ -606,10 +606,10 @@ output = {
 최종 출력 payload를 만든다. `**decision`으로 decision key를 바깥에도 펼친다.
 
 ```python
-return _make_data(output, text=json.dumps(decision, ensure_ascii=False))
+return _make_data(output)
 ```
 
-payload를 Data로 반환한다. `.text`에는 decision만 JSON 문자열로 넣는다.
+payload를 Data로 반환한다. query mode 결정 결과는 `.data["query_mode_decision"]`과 펼쳐진 top-level key에서 확인한다.
 
 ## 다음 노드 연결
 

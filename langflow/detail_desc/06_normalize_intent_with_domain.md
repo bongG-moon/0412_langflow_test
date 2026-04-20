@@ -258,10 +258,10 @@ def _get_domain(value: Any) -> Dict[str, Any]:
 `Domain JSON Loader.domain_payload`에서 `domain`을 꺼낸다.
 
 ```python
-def _get_index(index_payload: Any, domain_payload: Any = None) -> Dict[str, Any]:
+def _get_index(domain_payload: Any) -> Dict[str, Any]:
 ```
 
-`Domain JSON Loader.domain_index`에서 `domain_index`를 꺼낸다. 별도 연결이 없거나 비어 있으면 `domain_payload` 안의 `domain_index`를 fallback으로 사용한다.
+`domain_payload` 안의 `domain_index`를 꺼낸다. 별도 domain index output 포트는 더 이상 사용하지 않는다.
 
 ```python
 def _get_state(value: Any) -> Dict[str, Any]:
@@ -275,7 +275,6 @@ def _get_state(value: Any) -> Dict[str, Any]:
 def normalize_intent_with_domain(
     intent_raw: Any,
     domain_payload: Any,
-    domain_index_payload: Any,
     agent_state_payload: Any,
     user_question: str,
     reference_date: str = "",
@@ -287,7 +286,7 @@ raw intent를 domain 기준으로 보정하는 핵심 함수다.
 ```python
 intent = _get_intent(intent_raw)
 domain = _get_domain(domain_payload)
-domain_index = _get_index(domain_index_payload, domain_payload)
+domain_index = _get_index(domain_payload)
 agent_state = _get_state(agent_state_payload)
 question = str(user_question or agent_state.get("pending_user_question") or "")
 notes: list[str] = []
@@ -543,10 +542,10 @@ def build_intent(self) -> Data:
 Component input을 읽어 `normalize_intent_with_domain()`에 전달한다.
 
 ```python
-return _make_data(payload, text=json.dumps(payload["intent"], ensure_ascii=False))
+return _make_data(payload)
 ```
 
-payload 전체는 `.data`에 넣고, `.text`에는 intent만 JSON 문자열로 넣는다.
+payload 전체는 `.data`에 넣는다. 정규화된 intent도 `.data["intent"]`에서 확인한다.
 
 ## 다음 노드 연결
 

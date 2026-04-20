@@ -78,14 +78,14 @@ Output = _load_attr(["lfx.io", "langflow.io"], "Output", _FallbackOutput)
 Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", _FallbackData)
 
 
-def _make_data(payload: Dict[str, Any], text: str | None = None) -> Any:
+def _make_data(payload: Dict[str, Any]) -> Any:
     try:
-        return Data(data=payload, text=text)
+        return Data(data=payload)
     except TypeError:
         try:
             return Data(payload)
         except Exception:
-            return _FallbackData(data=payload, text=text)
+            return _FallbackData(data=payload)
 
 
 def _payload_from_value(value: Any) -> Dict[str, Any]:
@@ -214,4 +214,4 @@ class SessionStateLoader(Component):
             getattr(self, "session_id", "default"),
             getattr(self, "user_question", ""),
         )
-        return _make_data({"agent_state": state, "state": state}, text=json.dumps(state, ensure_ascii=False))
+        return _make_data({"agent_state": state, "state": state})

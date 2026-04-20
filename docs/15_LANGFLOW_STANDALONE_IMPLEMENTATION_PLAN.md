@@ -668,7 +668,7 @@ Custom Component로 구현한다.
 - preferred wrapper 구조와 bare domain 구조를 모두 표준 wrapper 구조로 정규화한다.
 - products, process_groups, terms, datasets, metrics, join_rules를 표준 dict로 만든다.
 - alias 검색을 쉽게 하기 위한 reverse index를 만든다.
-- 하나의 Domain JSON 입력에서 `domain_payload`와 `domain_index`를 모두 자동 생성한다.
+- 하나의 Domain JSON 입력에서 `domain_payload`를 생성하고, 그 안에 `domain_index`도 함께 담는다.
 
 출력:
 
@@ -683,14 +683,6 @@ Custom Component로 구현한다.
     "domain": {}
   },
   "domain": {},
-  "domain_errors": []
-}
-```
-
-`domain_index`:
-
-```json
-{
   "domain_index": {
     "term_alias_to_key": {},
     "product_alias_to_key": {},
@@ -727,7 +719,6 @@ Custom Component로 구현한다.
 - `user_question`
 - `agent_state`
 - `domain_payload`
-- `domain_index`
 
 역할:
 
@@ -840,8 +831,7 @@ Custom Component로 구현한다.
 입력:
 
 - `intent_raw`
-- `domain`
-- `domain_index`
+- `domain_payload`
 - `agent_state`
 - `user_question`
 
@@ -1440,12 +1430,9 @@ Domain JSON Input
 | `Session State Loader.agent_state` | `Build Intent Prompt.agent_state` | Yes |
 | `Session State Loader.agent_state` | `Normalize Intent With Domain.agent_state` | Yes |
 | `Session State Loader.agent_state` | `Request Type Router.agent_state` | Yes |
-| `Session State Loader.agent_state` | `Query Mode Decider.agent_state` | Optional |
 | `Domain JSON Loader.domain_payload` | `Build Intent Prompt.domain_payload` | Yes |
 | `Domain JSON Loader.domain_payload` | `Normalize Intent With Domain.domain_payload` | Yes |
 | `Domain JSON Loader.domain_payload` | `Query Mode Decider.domain_payload` | Yes |
-| `Domain JSON Loader.domain_index` | `Build Intent Prompt.domain_index` | Optional |
-| `Domain JSON Loader.domain_index` | `Normalize Intent With Domain.domain_index` | Optional |
 | `Build Intent Prompt.intent_prompt` | `LLM JSON Caller.prompt` | Yes |
 | `LLM JSON Caller.llm_result` | `Parse Intent JSON.llm_result` | Yes |
 | `Parse Intent JSON.intent_raw` | `Normalize Intent With Domain.intent_raw` | Yes |
@@ -1462,12 +1449,6 @@ Domain JSON Loader.domain_payload
   -> Build Intent Prompt.domain_payload
   -> Normalize Intent With Domain.domain_payload
   -> Query Mode Decider.domain_payload
-
-Domain JSON Loader.domain_index
-  -> Build Intent Prompt.domain_index
-  -> Normalize Intent With Domain.domain_index
-
-Note: `domain_payload` also carries `domain_index` as a fallback. If Langflow drops a custom component multi-output edge after execution, the flow can still run with the `domain_payload` connections.
 
 Build Intent Prompt.intent_prompt
   -> LLM JSON Caller.prompt

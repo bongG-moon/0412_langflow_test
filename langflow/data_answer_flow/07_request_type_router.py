@@ -76,14 +76,14 @@ Output = _load_attr(["lfx.io", "langflow.io"], "Output", _FallbackOutput)
 Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", _FallbackData)
 
 
-def _make_data(payload: Dict[str, Any], text: str | None = None) -> Any:
+def _make_data(payload: Dict[str, Any]) -> Any:
     try:
-        return Data(data=payload, text=text)
+        return Data(data=payload)
     except TypeError:
         try:
             return Data(payload)
         except Exception:
-            return _FallbackData(data=payload, text=text)
+            return _FallbackData(data=payload)
 
 
 def _payload_from_value(value: Any) -> Dict[str, Any]:
@@ -186,20 +186,20 @@ class RequestTypeRouter(Component):
 
     def build_route(self) -> Data:
         payload = self._payload()
-        return _make_data(payload, text=json.dumps(payload, ensure_ascii=False))
+        return _make_data(payload)
 
     def data_question_branch(self) -> Data:
         payload = self._payload()
-        return _make_data(payload, text=json.dumps(payload, ensure_ascii=False)) if payload["route"] == "data_question" else None
+        return _make_data(payload) if payload["route"] == "data_question" else None
 
     def process_execution_branch(self) -> Data:
         payload = self._payload()
         return (
-            _make_data(payload, text=json.dumps(payload, ensure_ascii=False))
+            _make_data(payload)
             if payload["route"] == "process_execution"
             else None
         )
 
     def clarification_branch(self) -> Data:
         payload = self._payload()
-        return _make_data(payload, text=json.dumps(payload, ensure_ascii=False)) if payload["route"] == "clarification" else None
+        return _make_data(payload) if payload["route"] == "clarification" else None

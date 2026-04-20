@@ -348,10 +348,10 @@ payload = parse_intent_json(value)
 핵심 함수로 LLM 응답을 intent payload로 변환한다.
 
 ```python
-return _make_data(payload, text=json.dumps(payload["intent_raw"], ensure_ascii=False))
+return _make_data(payload)
 ```
 
-payload를 Data로 반환한다. `.text`에는 intent_raw만 JSON 문자열로 넣는다.
+payload를 Data로 반환한다. `intent_raw`와 파싱 상태는 모두 `.data` 안의 key로 확인한다.
 
 ## 다음 노드 연결
 

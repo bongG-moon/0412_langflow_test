@@ -414,10 +414,10 @@ payload = call_llm_json(
 Component input 값을 읽어 핵심 함수로 전달한다.
 
 ```python
-return _make_data(payload, text=payload.get("llm_text", ""))
+return _make_data(payload)
 ```
 
-결과 payload를 `Data`로 감싸 반환한다. `.text`에는 LLM 응답 텍스트만 넣는다.
+결과 payload를 `Data`로 감싸 반환한다. LLM 응답 텍스트는 `.data["llm_text"]`에서 확인한다.
 
 ## 다음 노드 연결
 

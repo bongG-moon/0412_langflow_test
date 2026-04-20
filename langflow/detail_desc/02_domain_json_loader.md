@@ -2,7 +2,7 @@
 
 대상 코드: `langflow/data_answer_flow/02_domain_json_loader.py`
 
-이 노드는 Domain JSON을 실제 분석 flow에서 사용할 수 있는 표준 구조로 정리한다. 특히 사람이 읽기 좋은 `domain_payload`와 코드가 빠르게 alias를 찾기 위한 `domain_index`를 분리해서 출력한다.
+이 노드는 Domain JSON을 실제 분석 flow에서 사용할 수 있는 표준 구조로 정리한다. 출력은 `domain_payload` 하나이며, 이 payload 안에 domain 본문과 alias 검색용 `domain_index`를 함께 담는다.
 
 ## 전체 역할
 
@@ -15,7 +15,7 @@
 - `products`, `process_groups`, `terms`, `datasets`, `metrics`, `join_rules` 기본 구조를 보정한다.
 - dataset과 metric의 주요 필드를 검증하고 list 형태로 정리한다.
 - 제품명, 공정명, 용어, 지표명, dataset keyword 검색용 alias index를 만든다.
-- `domain_payload`와 `domain_index`를 별도 output으로 반환한다.
+- `domain_payload` 하나로 반환한다.
 
 ## 출력 구조
 
@@ -30,10 +30,10 @@
 }
 ```
 
-`domain_index` is intentionally included here as a fallback for Langflow
-versions that may drop a custom component multi-output edge after execution.
+`domain_index`는 별도 output 포트로 분리하지 않고 `domain_payload` 안에 함께 넣는다.
+그래야 뒤 노드가 `domain_payload` 하나만 연결해도 도메인 본문과 alias index를 모두 사용할 수 있다.
 
-`domain_index`는 다음 구조다.
+`domain_payload` 안의 `domain_index`는 다음 구조다.
 
 ```json
 {
@@ -545,25 +545,11 @@ DataInput(
 Output(
     name="domain_payload",
     method="build_domain_payload",
-    group_outputs=True,
     types=["Data"],
 )
 ```
 
-LLM prompt와 도메인 참조에 사용할 domain payload를 출력한다.
-
-```python
-Output(
-    name="domain_index",
-    method="build_domain_index",
-    group_outputs=True,
-    types=["Data"],
-)
-```
-
-alias 검색과 정규화에 사용할 domain index를 출력한다.
-
-`group_outputs=True`이므로 두 output이 Langflow에서 별도 포트로 보인다.
+LLM prompt와 도메인 참조에 사용할 domain payload를 출력한다. alias 검색과 정규화에 사용할 `domain_index`도 이 payload 안에 포함된다.
 
 ## 출력 메서드
 
@@ -572,13 +558,7 @@ def build_domain_payload(self) -> Data:
 ```
 
 입력을 읽고 `load_domain_json()`을 실행한 뒤 `domain_document`, `domain`, `domain_index`, `domain_errors`를 반환한다.
-`domain_index`는 별도 output으로도 제공되지만, multi-output 연결이 풀리는 Langflow 환경을 대비한 fallback으로 `domain_payload`에도 같이 담는다.
-
-```python
-def build_domain_index(self) -> Data:
-```
-
-입력을 읽고 `load_domain_json()`을 실행한 뒤 `domain_index`, `domain_errors`만 반환한다.
+`domain_index`는 별도 output으로 제공하지 않고 `domain_payload` 안에 같이 담는다.
 
 ```python
 def build_domain(self) -> Data:
@@ -591,16 +571,14 @@ def build_domain_document(self) -> Data:
 
 ```text
 Domain JSON Loader.domain_payload -> Build Intent Prompt.domain_payload
-Domain JSON Loader.domain_index   -> Build Intent Prompt.domain_index
 
 Domain JSON Loader.domain_payload -> Normalize Intent With Domain.domain_payload
-Domain JSON Loader.domain_index   -> Normalize Intent With Domain.domain_index
 
 Domain JSON Loader.domain_payload -> Query Mode Decider.domain_payload
 ```
 
 ## 학습 포인트
 
-이 노드는 “정리된 domain 본문”과 “검색용 index”를 분리하는 게 핵심이다.
+이 노드는 “정리된 domain 본문”과 “검색용 index”를 한 payload 안에서 구분해 담는 게 핵심이다.
 
-`domain_payload`는 LLM prompt에 넣기 좋고, `domain_index`는 코드가 alias를 빠르게 찾기 좋다. 두 목적이 다르기 때문에 output을 나누는 편이 유지보수에 유리하다.
+`domain_payload["domain"]`은 LLM prompt에 넣기 좋고, `domain_payload["domain_index"]`는 코드가 alias를 빠르게 찾기 좋다. 두 목적은 다르지만 연결 안정성을 위해 output 포트는 하나로 유지한다.

@@ -152,19 +152,19 @@ Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", 
 ## Data 생성 함수
 
 ```python
-def _make_data(payload: Dict[str, Any], text: str | None = None) -> Any:
+def _make_data(payload: Dict[str, Any]) -> Any:
     try:
-        return Data(data=payload, text=text)
+        return Data(data=payload)
     except TypeError:
         try:
             return Data(payload)
         except Exception:
-            return _FallbackData(data=payload, text=text)
+            return _FallbackData(data=payload)
 ```
 
 payload dict를 Langflow `Data` 객체로 감싼다.
 
-먼저 `Data(data=payload, text=text)` 방식으로 생성한다. Langflow 버전에 따라 이 생성자를 지원하지 않으면 `TypeError`가 날 수 있다.
+먼저 `Data(data=payload)` 방식으로 생성한다. Langflow 버전에 따라 이 생성자를 지원하지 않으면 `TypeError`가 날 수 있다.
 
 그 경우 `Data(payload)` 방식으로 다시 시도한다.
 
@@ -268,10 +268,10 @@ payload = {
 `domain_json_text`는 입력 원문이다. `is_empty`는 입력이 비어 있는지 여부다. `valid_json`은 JSON 파싱 가능 여부다.
 
 ```python
-return _make_data(payload, text=text)
+return _make_data(payload)
 ```
 
-payload를 Langflow `Data`로 감싸 반환한다. `.data`에는 payload dict가 들어가고, `.text`에는 원본 JSON 문자열이 들어간다.
+payload를 Langflow `Data`로 감싸 반환한다. `.data`에는 payload dict만 들어가며, 원본 JSON 문자열은 `domain_json_text` key로 확인한다.
 
 ## 다음 노드 연결
 

@@ -79,14 +79,14 @@ Output = _load_attr(["lfx.io", "langflow.io"], "Output", _FallbackOutput)
 Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", _FallbackData)
 
 
-def _make_data(payload: Dict[str, Any], text: str | None = None) -> Any:
+def _make_data(payload: Dict[str, Any]) -> Any:
     try:
-        return Data(data=payload, text=text)
+        return Data(data=payload)
     except TypeError:
         try:
             return Data(payload)
         except Exception:
-            return _FallbackData(data=payload, text=text)
+            return _FallbackData(data=payload)
 
 
 def _payload_from_value(value: Any) -> Dict[str, Any]:
@@ -186,11 +186,7 @@ def _get_domain(value: Any) -> Dict[str, Any]:
     return domain if isinstance(domain, dict) else payload
 
 
-def _get_index(index_payload: Any, domain_payload: Any = None) -> Dict[str, Any]:
-    payload = _payload_from_value(index_payload)
-    index = payload.get("domain_index")
-    if isinstance(index, dict):
-        return index
+def _get_index(domain_payload: Any) -> Dict[str, Any]:
     domain_payload_dict = _payload_from_value(domain_payload)
     index = domain_payload_dict.get("domain_index")
     return index if isinstance(index, dict) else {}
@@ -205,14 +201,13 @@ def _get_state(value: Any) -> Dict[str, Any]:
 def normalize_intent_with_domain(
     intent_raw: Any,
     domain_payload: Any,
-    domain_index_payload: Any,
     agent_state_payload: Any,
     user_question: str,
     reference_date: str = "",
 ) -> Dict[str, Any]:
     intent = _get_intent(intent_raw)
     domain = _get_domain(domain_payload)
-    domain_index = _get_index(domain_index_payload, domain_payload)
+    domain_index = _get_index(domain_payload)
     agent_state = _get_state(agent_state_payload)
     question = str(user_question or agent_state.get("pending_user_question") or "")
     notes: list[str] = []
@@ -328,12 +323,6 @@ class NormalizeIntentWithDomain(Component):
             input_types=["Data", "JSON"],
         ),
         DataInput(
-            name="domain_index",
-            display_name="Domain Index",
-            info="Domain Index output from Domain JSON Loader.",
-            input_types=["Data", "JSON"],
-        ),
-        DataInput(
             name="agent_state",
             display_name="Agent State",
             info="Output from Session State Loader.",
@@ -357,9 +346,8 @@ class NormalizeIntentWithDomain(Component):
         payload = normalize_intent_with_domain(
             getattr(self, "intent_raw", None),
             getattr(self, "domain_payload", None) or getattr(self, "domain", None),
-            getattr(self, "domain_index", None),
             getattr(self, "agent_state", None),
             getattr(self, "user_question", ""),
             getattr(self, "reference_date", ""),
         )
-        return _make_data(payload, text=json.dumps(payload["intent"], ensure_ascii=False))
+        return _make_data(payload)
