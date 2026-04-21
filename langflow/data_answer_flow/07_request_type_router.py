@@ -104,6 +104,12 @@ def _payload_from_value(value: Any) -> Dict[str, Any]:
     return {}
 
 
+def _main_context_from_value(value: Any) -> Dict[str, Any]:
+    payload = _payload_from_value(value)
+    main_context = payload.get("main_context")
+    return main_context if isinstance(main_context, dict) else {}
+
+
 def _get_intent(value: Any) -> Dict[str, Any]:
     payload = _payload_from_value(value)
     intent = payload.get("intent")
@@ -116,9 +122,14 @@ def _get_state(value: Any) -> Dict[str, Any]:
     return state if isinstance(state, dict) else payload
 
 
-def route_request_type(intent_value: Any, state_value: Any) -> Dict[str, Any]:
+def route_request_type(intent_value: Any, state_value: Any, main_context_value: Any = None) -> Dict[str, Any]:
+    intent_payload = _payload_from_value(intent_value)
+    main_context = _main_context_from_value(main_context_value) or _main_context_from_value(intent_payload)
     intent = _get_intent(intent_value)
     agent_state = _get_state(state_value)
+    if not agent_state and main_context:
+        state = main_context.get("agent_state")
+        agent_state = state if isinstance(state, dict) else {}
     request_type = str(intent.get("request_type") or "unknown")
     try:
         confidence = float(intent.get("confidence") or 0.0)
@@ -143,6 +154,7 @@ def route_request_type(intent_value: Any, state_value: Any) -> Dict[str, Any]:
         "request_type": request_type,
         "intent": intent,
         "agent_state": agent_state,
+        "main_context": main_context,
         "response": response,
     }
 
@@ -161,10 +173,18 @@ class RequestTypeRouter(Component):
             input_types=["Data", "JSON"],
         ),
         DataInput(
+            name="main_context",
+            display_name="Main Context",
+            info="Optional direct output from Main Flow Context Builder. Usually propagated by Normalize Intent With Domain.",
+            input_types=["Data", "JSON"],
+            advanced=True,
+        ),
+        DataInput(
             name="agent_state",
             display_name="Agent State",
-            info="Output from Session State Loader.",
+            info="Legacy direct state input. Prefer the propagated Main Context from Intent.",
             input_types=["Data", "JSON"],
+            advanced=True,
         ),
     ]
 
@@ -182,7 +202,11 @@ class RequestTypeRouter(Component):
     ]
 
     def _payload(self) -> Dict[str, Any]:
-        return route_request_type(getattr(self, "intent", None), getattr(self, "agent_state", None))
+        return route_request_type(
+            getattr(self, "intent", None),
+            getattr(self, "agent_state", None),
+            getattr(self, "main_context", None),
+        )
 
     def build_route(self) -> Data:
         payload = self._payload()

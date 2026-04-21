@@ -115,6 +115,17 @@ def _payload_from_value(value: Any) -> Dict[str, Any]:
     text = getattr(value, "text", None)
     if isinstance(text, str):
         return {"text": text}
+    content = getattr(value, "content", None)
+    if isinstance(content, str):
+        return {"text": content}
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and isinstance(item.get("text"), str):
+                parts.append(item["text"])
+        return {"text": "\n".join(parts)}
     return {}
 
 
@@ -126,6 +137,19 @@ def _read_text(value: Any) -> str:
         if isinstance(payload.get(key), str):
             return payload[key].strip()
     text = getattr(value, "text", None)
+    if isinstance(text, str):
+        return text.strip()
+    content = getattr(value, "content", None)
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and isinstance(item.get("text"), str):
+                parts.append(item["text"])
+        return "\n".join(parts).strip()
     return str(text or "").strip()
 
 
@@ -206,8 +230,8 @@ class ParseIntentJson(Component):
         DataInput(
             name="llm_result",
             display_name="LLM Result",
-            info="Output from LLM JSON Caller.",
-            input_types=["Data", "JSON"],
+            info="Output from a built-in LLM node or optional LLM JSON Caller.",
+            input_types=["Data", "Message", "Text", "JSON"],
         ),
         MultilineInput(name="llm_text", display_name="LLM Text", value="", advanced=True),
     ]

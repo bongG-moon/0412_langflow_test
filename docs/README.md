@@ -15,6 +15,7 @@ Recommended reading order:
 8. `14_LOCAL_SKILLS.md`
 9. `15_LANGFLOW_STANDALONE_IMPLEMENTATION_PLAN.md`
 10. `16_LANGFLOW_CUSTOM_NODE_CODE_GUIDE.md`
+11. `17_LANGFLOW_DOMAIN_ITEM_FLOW_GUIDE.md`
 
 ## Document Map
 
@@ -29,3 +30,4 @@ Recommended reading order:
 - `14_LOCAL_SKILLS.md`: local Codex skill notes
 - `15_LANGFLOW_STANDALONE_IMPLEMENTATION_PLAN.md`: standalone Langflow phase 1 implementation plan
 - `16_LANGFLOW_CUSTOM_NODE_CODE_GUIDE.md`: beginner-friendly Langflow custom node coding guide
+- `17_LANGFLOW_DOMAIN_ITEM_FLOW_GUIDE.md`: detailed guide for the item-based domain authoring flow and MongoDB handoff to the main flow

@@ -107,6 +107,12 @@ def _payload_from_value(value: Any) -> Dict[str, Any]:
     return {}
 
 
+def _main_context_from_value(value: Any) -> Dict[str, Any]:
+    payload = _payload_from_value(value)
+    main_context = payload.get("main_context")
+    return main_context if isinstance(main_context, dict) else {}
+
+
 def _normalize_text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
@@ -204,7 +210,20 @@ def normalize_intent_with_domain(
     agent_state_payload: Any,
     user_question: str,
     reference_date: str = "",
+    main_context_payload: Any = None,
 ) -> Dict[str, Any]:
+    main_context = _main_context_from_value(main_context_payload)
+    if main_context:
+        if domain_payload is None:
+            domain_payload = main_context.get("domain_payload") or {
+                "domain": main_context.get("domain", {}),
+                "domain_index": main_context.get("domain_index", {}),
+            }
+        if agent_state_payload is None:
+            agent_state_payload = {"agent_state": main_context.get("agent_state", {})}
+        user_question = str(user_question or main_context.get("user_question") or "")
+        reference_date = str(reference_date or main_context.get("reference_date") or "")
+
     intent = _get_intent(intent_raw)
     domain = _get_domain(domain_payload)
     domain_index = _get_index(domain_payload)
@@ -300,7 +319,10 @@ def normalize_intent_with_domain(
 
     intent["raw_terms"] = _unique(intent.get("raw_terms", []) + notes)
     intent["normalization_notes"] = notes
-    return {"intent": intent}
+    output = {"intent": intent}
+    if main_context:
+        output["main_context"] = main_context
+    return output
 
 
 class NormalizeIntentWithDomain(Component):
@@ -317,18 +339,26 @@ class NormalizeIntentWithDomain(Component):
             input_types=["Data", "JSON"],
         ),
         DataInput(
+            name="main_context",
+            display_name="Main Context",
+            info="Output from Main Flow Context Builder. Preferred input for state and domain.",
+            input_types=["Data", "JSON"],
+        ),
+        DataInput(
             name="domain_payload",
             display_name="Domain Payload",
-            info="Domain Payload output from Domain JSON Loader.",
+            info="Legacy direct domain input. Prefer Main Context.",
             input_types=["Data", "JSON"],
+            advanced=True,
         ),
         DataInput(
             name="agent_state",
             display_name="Agent State",
-            info="Output from Session State Loader.",
+            info="Legacy direct state input. Prefer Main Context.",
             input_types=["Data", "JSON"],
+            advanced=True,
         ),
-        MessageTextInput(name="user_question", display_name="User Question", info="Current user question."),
+        MessageTextInput(name="user_question", display_name="User Question", info="Legacy direct question input.", advanced=True),
         MessageTextInput(
             name="reference_date",
             display_name="Reference Date",
@@ -349,5 +379,6 @@ class NormalizeIntentWithDomain(Component):
             getattr(self, "agent_state", None),
             getattr(self, "user_question", ""),
             getattr(self, "reference_date", ""),
+            getattr(self, "main_context", None),
         )
         return _make_data(payload)

@@ -104,6 +104,12 @@ def _payload_from_value(value: Any) -> Dict[str, Any]:
     return {}
 
 
+def _main_context_from_value(value: Any) -> Dict[str, Any]:
+    payload = _payload_from_value(value)
+    main_context = payload.get("main_context")
+    return main_context if isinstance(main_context, dict) else {}
+
+
 def _as_list(value: Any) -> list[Any]:
     if value is None:
         return []
@@ -212,14 +218,19 @@ def _explicit_fresh_request(intent: Dict[str, Any]) -> bool:
     return any(token in summary.lower() for token in fresh_tokens)
 
 
-def decide_query_mode(intent_value: Any, state_value: Any, domain_value: Any) -> Dict[str, Any]:
+def decide_query_mode(intent_value: Any, state_value: Any, domain_value: Any, main_context_value: Any = None) -> Dict[str, Any]:
     intent_payload = _payload_from_value(intent_value)
+    main_context = _main_context_from_value(main_context_value) or _main_context_from_value(intent_payload)
     intent = _get_intent(intent_value)
     agent_state = _get_state(state_value)
     if not agent_state and isinstance(intent_payload.get("agent_state"), dict):
         agent_state = intent_payload["agent_state"]
     elif not agent_state and isinstance(intent_payload.get("state"), dict):
         agent_state = intent_payload["state"]
+    elif not agent_state and isinstance(main_context.get("agent_state"), dict):
+        agent_state = main_context["agent_state"]
+    if domain_value is None and main_context:
+        domain_value = main_context.get("domain_payload") or {"domain": main_context.get("domain", {})}
     domain = _get_domain(domain_value)
     snapshots = agent_state.get("source_snapshots") if isinstance(agent_state.get("source_snapshots"), dict) else {}
     current_data = agent_state.get("current_data")
@@ -383,16 +394,25 @@ class QueryModeDecider(Component):
             input_types=["Data", "JSON"],
         ),
         DataInput(
+            name="main_context",
+            display_name="Main Context",
+            info="Optional direct output from Main Flow Context Builder. Usually propagated by Router branch.",
+            input_types=["Data", "JSON"],
+            advanced=True,
+        ),
+        DataInput(
             name="agent_state",
             display_name="Agent State",
-            info="Output from Session State Loader. Optional when router branch payload already contains agent_state.",
+            info="Legacy direct state input. Prefer propagated Main Context.",
             input_types=["Data", "JSON"],
+            advanced=True,
         ),
         DataInput(
             name="domain_payload",
             display_name="Domain Payload",
-            info="Domain Payload output from Domain JSON Loader.",
+            info="Legacy direct domain input. Prefer propagated Main Context.",
             input_types=["Data", "JSON"],
+            advanced=True,
         ),
     ]
 
@@ -405,15 +425,20 @@ class QueryModeDecider(Component):
             getattr(self, "intent", None),
             getattr(self, "agent_state", None),
             getattr(self, "domain_payload", None) or getattr(self, "domain", None),
+            getattr(self, "main_context", None),
         )
         intent_payload = _payload_from_value(getattr(self, "intent", None))
+        main_context = _main_context_from_value(getattr(self, "main_context", None)) or _main_context_from_value(intent_payload)
         agent_state = _get_state(getattr(self, "agent_state", None))
         if not agent_state and isinstance(intent_payload.get("agent_state"), dict):
             agent_state = intent_payload["agent_state"]
+        elif not agent_state and isinstance(main_context.get("agent_state"), dict):
+            agent_state = main_context["agent_state"]
         output = {
             "query_mode_decision": decision,
             "intent": _get_intent(getattr(self, "intent", None)),
             "agent_state": agent_state,
+            "main_context": main_context,
             **decision,
         }
         return _make_data(output)

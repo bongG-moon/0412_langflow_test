@@ -1,0 +1,321 @@
+# Domain Authoring Flow 샘플 원문
+
+아래 내용은 사용자가 Langflow의 Raw Domain Input에 붙여 넣을 수 있는 예시다.
+자연어 설명, 표 형태, 부분 JSON, 기존 Streamlit 도메인 관리 화면에서 쓰던 표현을 일부러 섞어 두었다.
+LLM은 이 내용을 읽고 products, process_groups, terms, datasets, metrics, join_rules로 분류해야 한다.
+
+
+## 1. 제품 구분과 제품 alias
+
+A제품은 product 컬럼의 A 값을 의미한다.
+A, A제품, 에이제품은 모두 같은 제품이다.
+
+B제품은 product 컬럼의 B 값을 의미한다.
+B, B제품, 비제품은 모두 같은 제품이다.
+
+DDR4 제품군은 MODE 컬럼 값이 DDR4인 제품이다.
+DDR4, DDR 4, 디디알4, DDR4제품은 같은 의미다.
+
+DDR5 제품군은 MODE 컬럼 값이 DDR5인 제품이다.
+DDR5, DDR 5, 디디알5, DDR5제품은 같은 의미다.
+
+LPDDR5 제품군은 MODE 컬럼 값이 LPDDR5인 제품이다.
+LPDDR5, LP DDR5, LP5, 저전력DDR5, 모바일DDR5는 같은 의미다.
+
+HBM 또는 3DS 제품은 TSV_DIE_TYP 컬럼 값이 TSV인 제품이다.
+HBM, HBM제품, HBM자재, 3DS, 3DS제품, TSV제품은 같은 의미다.
+
+Auto향 제품은 MCP_NO 마지막 문자가 I, O, N, P, 1, V 중 하나인 제품을 의미한다.
+Auto향, Auto, 오토, 자동차향, 차량향, automotive는 같은 의미다.
+
+A-410A는 DDR4 256G LC 제품이고 MCP_NO는 A-410A다.
+A-421I는 DDR4 512G LC 제품이고 MCP_NO는 A-421I다.
+A-587N은 DDR5 512G FC 제품이고 MCP_NO는 A-587N이다.
+A-553P는 DDR5 256G FC 제품이고 MCP_NO는 A-553P다.
+A-612B는 DDR5 1T FC TSV 제품이고 MCP_NO는 A-612B다.
+A-7301은 LPDDR5 512G FO 제품이고 MCP_NO는 A-7301이다.
+A-701O는 LPDDR5 256G FO 제품이고 MCP_NO는 A-701O다.
+A-811V는 LPDDR5 1T FO TSV 제품이고 MCP_NO는 A-811V다.
+A-455V는 DDR4 1T LC 제품이고 MCP_NO는 A-455V다.
+
+
+## 2. 공정 그룹과 공정 alias
+
+DP 공정군은 전공정 성격의 DP 공정 그룹이다.
+DP, D/P, 전공정 DP는 같은 의미다.
+DP 공정군에는 WET1, WET2, L/T1, L/T2, B/G1, B/G2, H/S1, H/S2, W/S1, W/S2, WSD1, WSD2, WEC1, WEC2, WLS1, WLS2, WVI, UV, C/C1이 포함된다.
+
+WET은 WET1, WET2를 의미한다.
+LT 또는 L/T는 L/T1, L/T2를 의미한다.
+BG 또는 B/G는 B/G1, B/G2를 의미한다.
+HS 또는 H/S는 H/S1, H/S2를 의미한다.
+WS 또는 W/S는 W/S1, W/S2를 의미한다.
+
+D/A 공정군은 Die Attach 공정 그룹이다.
+D/A, DA, DA공정, Die Attach, DIE ATTACH, 다이 어태치, 다이부착, 다이어태치, 다이본딩은 같은 의미다.
+D/A 공정군에는 D/A1, D/A2, D/A3, D/A4, D/A5, D/A6이 포함된다.
+
+PCO 공정군에는 PCO1, PCO2, PCO3, PCO4, PCO5, PCO6이 포함된다.
+D/C 또는 DC 공정군에는 D/C1, D/C2, D/C3, D/C4가 포함된다.
+D/I 또는 DI는 D/I 단일 공정을 의미한다. DVI와 혼동하지 않는다.
+D/S 또는 DS는 기본적으로 D/S1 공정을 의미한다.
+
+FCB 공정군은 Flip Chip 공정 그룹이다.
+FCB, Flip Chip, 플립칩은 같은 의미고 FCB1, FCB2를 포함한다.
+FCB/H 또는 FCBH는 FCB/H 단일 공정이다.
+
+B/M, BM, Ball Mount, 볼마운트는 B/M 공정을 의미한다.
+P/C 또는 PC 공정군에는 P/C1, P/C2, P/C3, P/C4, P/C5가 포함된다.
+
+W/B 공정군은 Wire Bonding 공정 그룹이다.
+W/B, WB, WB공정, Wire Bonding, 와이어 본딩, 와이어본딩은 같은 의미다.
+W/B 공정군에는 W/B1, W/B2, W/B3, W/B4, W/B5, W/B6이 포함된다.
+
+QCSPC 공정군에는 QCSPC1, QCSPC2, QCSPC3, QCSPC4가 포함된다.
+SAT 공정군에는 SAT1, SAT2가 포함된다.
+P/L, PL, Pack Line, 포장은 PLH 공정을 의미한다.
+
+DVI, BBMS, AVI, MDVI, MDTI, QCSAT, LMDI, DIC, EVI는 그룹으로 확장하지 않고 공정명 그대로 해석하는 단일 공정이다.
+
+투입, input, 인풋, 사입이라는 표현은 INPUT 공정을 의미한다.
+투입량 또는 INPUT 생산량은 INPUT 공정의 생산량을 의미한다.
+
+
+## 3. 일반 용어와 필터 조건
+
+MODE_DDR4는 MODE 컬럼 값이 DDR4인 조건이다.
+MODE_DDR5는 MODE 컬럼 값이 DDR5인 조건이다.
+MODE_LPDDR5는 MODE 컬럼 값이 LPDDR5인 조건이다.
+
+256G, 256Gb, 256gb, 256기가는 DEN 컬럼 값 256G를 의미한다.
+512G, 512Gb, 512gb, 512기가는 DEN 컬럼 값 512G를 의미한다.
+1T, 1Tb, 1tb, 1TB, 1테라는 DEN 컬럼 값 1T를 의미한다.
+
+LC, LC제품, 엘씨, 엘시는 TECH 컬럼 값 LC를 의미한다.
+FO, FO제품, fan-out, Fan-Out, 팬아웃, 에프오는 TECH 컬럼 값 FO를 의미한다.
+FC, FC제품, Flip Chip, 플립칩, 에프씨는 TECH 컬럼 값 FC를 의미한다.
+
+FCBGA 또는 fcbga는 PKG_TYPE1 컬럼 값 FCBGA를 의미한다.
+LFBGA 또는 lfbga는 PKG_TYPE1 컬럼 값 LFBGA를 의미한다.
+ODP 또는 odp는 PKG_TYPE2 컬럼 값 ODP를 의미한다.
+16DP 또는 16dp는 PKG_TYPE2 컬럼 값 16DP를 의미한다.
+SDP 또는 sdp는 PKG_TYPE2 컬럼 값 SDP를 의미한다.
+
+HOLD 이상, HOLD 이상여부, 홀드 이상, 홀드 체크, REWORK 이상이라는 표현은 상태 컬럼 값이 HOLD 또는 REWORK인 경우를 의미한다.
+
+후공정A는 D/A1, D/A2를 묶은 사용자 정의 공정 묶음이다.
+
+
+## 4. 데이터셋 정의와 필수 조회 파라미터
+
+production 데이터셋은 생산 데이터다.
+생산, 생산량, 실적, 투입, input, 인풋, output, production이라는 표현은 production 데이터셋을 찾는 keyword다.
+production 데이터셋은 date가 필수 조회 파라미터다.
+production 데이터셋의 고정 쿼리는 production_by_date를 사용한다.
+production 데이터셋의 tool_name은 get_production_data다.
+production 데이터셋 컬럼은 WORK_DT(date), OPER_NAME(string), 공정군(string), OPER_NUM(string), 라인(string), MODE(string), DEN(string), TECH(string), LEAD(string), PKG_TYPE1(string), PKG_TYPE2(string), TSV_DIE_TYP(string), MCP_NO(string), FAMILY(string), FACTORY(string), ORG(string), production(number)이다.
+production 컬럼은 생산 수량을 의미하고 qty, production_qty, actual_qty, 실적이라는 alias를 가진다.
+
+target 데이터셋은 목표 데이터다.
+목표, 목표량, 계획, target, plan, goal이라는 표현은 target 데이터셋을 찾는 keyword다.
+target 데이터셋은 date가 필수 조회 파라미터다.
+target 데이터셋의 고정 쿼리는 target_by_date를 사용한다.
+target 데이터셋의 tool_name은 get_target_data다.
+target 데이터셋 컬럼은 WORK_DT(date), OPER_NAME(string), 공정군(string), OPER_NUM(string), 라인(string), MODE(string), DEN(string), TECH(string), PKG_TYPE1(string), PKG_TYPE2(string), TSV_DIE_TYP(string), MCP_NO(string), target(number)이다.
+target 컬럼은 목표 수량을 의미하고 target_qty, plan_qty, goal_qty라는 alias를 가진다.
+
+defect 데이터셋은 불량 데이터다.
+불량, 불량률, defect, 결함, NG, ng라는 표현은 defect 데이터셋을 찾는 keyword다.
+defect 데이터셋은 date가 필수 조회 파라미터다.
+defect 데이터셋의 고정 쿼리는 defect_by_date를 사용한다.
+defect 데이터셋의 tool_name은 get_defect_rate다.
+defect 데이터셋 컬럼은 WORK_DT(date), OPER_NAME(string), 공정군(string), MODE(string), DEN(string), TECH(string), MCP_NO(string), inspection_qty(number), 불량수량(number), defect_rate(number), 주요불량유형(string)이다.
+
+equipment 데이터셋은 설비 데이터다.
+설비, 가동률, 장비, equipment, downtime, 비가동이라는 표현은 equipment 데이터셋을 찾는 keyword다.
+equipment 데이터셋은 date가 필수 조회 파라미터다.
+equipment 데이터셋 컬럼은 WORK_DT(date), OPER_NAME(string), 공정군(string), MODE(string), DEN(string), 설비ID(string), 설비명(string), planned_hours(number), actual_hours(number), 가동률(number), 비가동사유(string)이다.
+
+wip 데이터셋은 재공 데이터다.
+wip, WIP, 재공, 대기, 재공수량이라는 표현은 wip 데이터셋을 찾는 keyword다.
+wip 데이터셋은 date가 필수 조회 파라미터다.
+wip 데이터셋 컬럼은 WORK_DT(date), OPER_NAME(string), 공정군(string), MODE(string), DEN(string), 재공수량(number), avg_wait_minutes(number), 상태(string)이다.
+
+yield 데이터셋은 수율 데이터다.
+수율, 양품률, yield, yield rate, pass rate, 합격률이라는 표현은 yield 데이터셋을 찾는 keyword다.
+yield 데이터셋은 date가 필수 조회 파라미터다.
+yield 데이터셋 컬럼은 WORK_DT(date), OPER_NAME(string), 공정군(string), MODE(string), DEN(string), tested_qty(number), pass_qty(number), yield_rate(number), dominant_fail_bin(string)이다.
+
+hold 데이터셋은 Hold 데이터다.
+hold, 홀드, 보류, 보류 lot, hold lot이라는 표현은 hold 데이터셋을 찾는 keyword다.
+hold 데이터셋은 date가 필수 조회 파라미터다.
+hold 데이터셋 컬럼은 WORK_DT(date), OPER_NAME(string), 공정군(string), MODE(string), DEN(string), lot_id(string), hold_qty(number), hold_reason(string), hold_owner(string), hold_hours(number), hold_status(string)이다.
+
+scrap 데이터셋은 Scrap 데이터다.
+scrap, 스크랩, 폐기, loss cost, 손실비용이라는 표현은 scrap 데이터셋을 찾는 keyword다.
+scrap 데이터셋은 date가 필수 조회 파라미터다.
+scrap 데이터셋 컬럼은 WORK_DT(date), OPER_NAME(string), 공정군(string), MODE(string), DEN(string), scrap_qty(number), scrap_rate(number), scrap_reason(string), loss_cost_usd(number)이다.
+
+recipe 데이터셋은 Recipe 데이터다.
+recipe, 레시피, 공정 조건, 조건값, parameter, 파라미터라는 표현은 recipe 데이터셋을 찾는 keyword다.
+recipe 데이터셋은 date가 필수 조회 파라미터다.
+recipe 데이터셋 컬럼은 WORK_DT(date), OPER_NAME(string), 공정군(string), MODE(string), DEN(string), recipe_id(string), recipe_version(string), temp_c(number), pressure_kpa(number), process_time_sec(number), operator_id(string)이다.
+
+lot_trace 데이터셋은 LOT 이력 데이터다.
+lot, LOT, lot trace, lot 이력, 추적, traceability, 로트라는 표현은 lot_trace 데이터셋을 찾는 keyword다.
+lot_trace 데이터셋은 date가 필수 조회 파라미터다.
+lot_trace 데이터셋 컬럼은 WORK_DT(date), OPER_NAME(string), 공정군(string), MODE(string), DEN(string), lot_id(string), wafer_id(string), route_step(number), current_status(string), elapsed_hours(number), next_process(string), hold_reason(string)이다.
+
+
+## 5. Metric, 수식, 계산 규칙
+
+생산량은 production 데이터셋의 production 컬럼 합계다.
+생산량, 생산, 투입량, 실적, output, production은 production_qty metric을 의미한다.
+production_qty metric은 production 데이터셋이 필요하고 output_column은 production_qty다.
+기본 group by는 OPER_NAME이다.
+
+목표량은 target 데이터셋의 target 컬럼 합계다.
+목표량, 목표, 계획량, target, plan은 target_qty metric을 의미한다.
+target_qty metric은 target 데이터셋이 필요하고 output_column은 target_qty다.
+기본 group by는 OPER_NAME이다.
+
+생산 달성율은 생산량 / 목표량 * 100으로 계산한다.
+생산 달성률, 생산 달성율, 달성률, 달성율, 목표 대비 생산, achievement, achievement rate는 achievement_rate metric을 의미한다.
+achievement_rate metric은 production 데이터셋과 target 데이터셋이 필요하다.
+source column은 production.production이 numerator이고 target.target이 denominator다.
+계산식은 sum(production.production) / sum(target.target) * 100 이다.
+output_column은 achievement_rate이고 단위는 %다.
+production과 target을 공통 key로 merge한 뒤 OPER_NAME 기준으로 집계한다.
+
+생산 포화율은 생산량 / 재공수량 * 100으로 계산한다.
+포화율, 생산 포화율, 생산포화율, 포화도, production saturation, production saturation rate는 production_saturation_rate metric을 의미한다.
+production_saturation_rate metric은 production 데이터셋과 wip 데이터셋이 필요하다.
+source column은 production.production이 numerator이고 wip.재공수량이 denominator다.
+output_column은 production_saturation_rate이고 단위는 %다.
+
+생산 목표 차이율은 (생산량 - 목표량) / 목표량 * 100으로 계산한다.
+생산 목표 차이율, 목표 차이율, 계획 차이율, plan_gap_rate는 plan_gap_rate metric을 의미한다.
+plan_gap_rate metric은 production 데이터셋과 target 데이터셋이 필요하다.
+source column은 production.production과 target.target이다.
+output_column은 plan_gap_rate이고 기본 group by는 OPER_NAME이다.
+
+불량률은 defect 데이터셋의 defect_rate 평균을 우선 사용하고, 필요하면 불량수량 / inspection_qty * 100으로 계산한다.
+불량률, defect rate, ng rate는 defect_rate metric을 의미한다.
+defect_rate metric은 defect 데이터셋이 필요하다.
+
+수율은 yield 데이터셋의 yield_rate 평균을 우선 사용하고, 필요하면 pass_qty / tested_qty * 100으로 계산한다.
+수율, 양품률, yield, yield rate, pass rate, 합격률은 yield_rate metric을 의미한다.
+yield_rate metric은 yield 데이터셋이 필요하다.
+
+설비 가동률은 equipment 데이터셋의 가동률 평균을 우선 사용하고, 필요하면 actual_hours / planned_hours * 100으로 계산한다.
+가동률, 설비 가동률, 장비 가동률, utilization, util_rate는 equipment_utilization metric을 의미한다.
+equipment_utilization metric은 equipment 데이터셋이 필요하다.
+
+재공 수량은 wip 데이터셋의 재공수량 합계다.
+재공, 재공수량, wip, wip qty, WIP는 wip_qty metric을 의미한다.
+
+Hold 수량은 hold 데이터셋의 hold_qty 합계다.
+홀드, Hold, hold, hold qty, 보류 수량은 hold_qty metric을 의미한다.
+
+홀드 부하지수는 hold_qty / production 으로 계산한다.
+홀드 부하지수, 부하지수, hold_load_index는 hold_load_index metric을 의미한다.
+hold_load_index metric은 hold 데이터셋과 production 데이터셋이 필요하다.
+source column은 hold.hold_qty가 numerator이고 production.production이 denominator다.
+
+HOLD 이상여부는 wip 데이터의 상태 컬럼이 HOLD 또는 REWORK면 이상이고 아니면 정상이다.
+HOLD 이상여부, 홀드 체크, hold_anomaly_check, HOLD 이상, REWORK 이상은 hold_anomaly_check metric을 의미한다.
+calculation_mode는 condition_flag다.
+condition은 상태 in ['HOLD', 'REWORK'] 이다.
+decision_rule은 상태가 HOLD 또는 REWORK이면 이상, 그 외에는 정상이다.
+output_column은 hold_anomaly_flag다.
+
+스크랩률은 scrap 데이터셋의 scrap_rate 평균이다.
+스크랩률, scrap rate, 폐기율은 scrap_rate metric을 의미한다.
+
+손실 비용은 scrap 데이터셋의 loss_cost_usd 합계다.
+손실비용, 손실 비용, loss cost, loss_cost_usd는 loss_cost metric을 의미한다.
+
+LOT 체류 시간은 lot_trace 데이터셋의 elapsed_hours 평균이다.
+체류 시간, 평균 체류 시간, elapsed hours, lot elapsed는 lot_elapsed_hours metric을 의미한다.
+
+
+## 6. Join rule
+
+production과 target은 WORK_DT, OPER_NAME, 공정군, 라인, MODE, DEN 기준으로 left join한다.
+이 join rule 이름은 production_target_join이다.
+
+production과 wip는 WORK_DT, OPER_NAME, 공정군, 라인, MODE, DEN 기준으로 left join한다.
+이 join rule 이름은 production_wip_join이다.
+
+production과 hold는 WORK_DT, OPER_NAME, 공정군, MODE, DEN 기준으로 left join한다.
+이 join rule 이름은 production_hold_join이다.
+
+production과 defect는 WORK_DT, OPER_NAME, 공정군, MODE, DEN 기준으로 left join한다.
+이 join rule 이름은 production_defect_join이다.
+
+production과 yield는 WORK_DT, OPER_NAME, 공정군, MODE, DEN 기준으로 left join한다.
+이 join rule 이름은 production_yield_join이다.
+
+production과 equipment는 WORK_DT, OPER_NAME, 공정군, MODE, DEN 기준으로 left join한다.
+이 join rule 이름은 production_equipment_join이다.
+
+production과 scrap은 WORK_DT, OPER_NAME, 공정군, MODE, DEN 기준으로 left join한다.
+이 join rule 이름은 production_scrap_join이다.
+
+
+## 7. 표 형태로 복사된 도메인 설명 예시
+
+용어,의미,컬럼,조건
+Auto향,MCP_NO 마지막 문자가 I/O/N/P/1/V인 제품,MCP_NO,suffix in I/O/N/P/1/V
+HBM,TSV 제품,TSV_DIE_TYP,equals TSV
+양품률,수율 데이터셋을 의미,dataset,yield
+HOLD 이상,상태가 HOLD 또는 REWORK인 경우,상태,in HOLD/REWORK
+
+metric,의미,필요 데이터셋,수식,기본 집계
+achievement_rate,생산 달성율,production+target,production / target * 100,OPER_NAME
+hold_load_index,홀드 부하지수,hold+production,hold_qty / production,OPER_NAME
+plan_gap_rate,생산 목표 차이율,production+target,(production - target) / target * 100,OPER_NAME
+
+
+## 8. 기존 Streamlit 도메인 관리 화면 스타일 입력 예시
+
+아래 문장들은 예전 도메인 관리 화면에 사용자가 줄글로 넣던 형태다.
+
+HOLD 이상여부는 wip 상태가 HOLD, REWORK면 이상이고 아니면 정상이야.
+
+생산 목표 차이율은 production 테이블의 production 값과 target 테이블의 target 값을 같이 가져와서 계산해줘.
+계산식은 (production - target) / target 이야.
+결과 컬럼 이름은 plan_gap_rate 로 두고, 특별한 요청이 없으면 공정 기준으로 집계해서 보여줘.
+
+홀드 부하지수는 hold 테이블의 hold_qty 와 production 테이블의 production 을 같이 가져와서 계산해줘.
+계산식은 hold_qty / production 이야.
+결과 컬럼 이름은 hold_load_index 로 두고, 기본적으로 공정 기준으로 묶어서 보여줘.
+
+양품률이라는 표현은 수율 데이터셋을 뜻해.
+
+
+## 9. 부분 JSON 입력 예시
+
+{
+  "products": {
+    "A": {
+      "display_name": "A제품",
+      "aliases": ["A", "A제품", "에이제품"],
+      "filters": {
+        "product": "A"
+      }
+    }
+  },
+  "metrics": {
+    "achievement_rate": {
+      "display_name": "생산 달성율",
+      "aliases": ["달성율", "달성률", "생산 달성율", "생산 달성률"],
+      "required_datasets": ["production", "target"],
+      "required_columns": ["production", "target"],
+      "formula": "sum(production.production) / sum(target.target) * 100",
+      "output_column": "achievement_rate",
+      "default_group_by": ["OPER_NAME"],
+      "default_output_unit": "%"
+    }
+  }
+}

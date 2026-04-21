@@ -12,8 +12,8 @@ from typing import Any, Dict
 # versions. In the actual lfx-based Langflow environment, this block is not
 # required and can be replaced with direct imports such as:
 #   from lfx.custom import Component
-#   from lfx.io import DataInput, MessageTextInput, Output
-#   from lfx.schema import Data
+#   from lfx.io import DataInput, MessageTextInput, Output, PromptInput
+#   from lfx.schema import Data, Message
 def _load_attr(module_names: list[str], attr_name: str, fallback: Any) -> Any:
     for module_name in module_names:
         try:
@@ -42,6 +42,7 @@ class _FallbackInput:
     advanced: bool = False
     tool_mode: bool = False
     input_types: list[str] | None = None
+    required: bool = False
 
 
 @dataclass
@@ -60,6 +61,12 @@ class _FallbackData:
         self.text = text
 
 
+class _FallbackMessage:
+    def __init__(self, text: str | None = None, **kwargs: Any):
+        self.text = text or str(kwargs.get("content") or "")
+        self.content = self.text
+
+
 def _make_input(**kwargs: Any) -> _FallbackInput:
     return _FallbackInput(**kwargs)
 
@@ -73,8 +80,42 @@ Component = _load_attr(
 )
 DataInput = _load_attr(["lfx.io", "langflow.io"], "DataInput", _make_input)
 MessageTextInput = _load_attr(["lfx.io", "langflow.io"], "MessageTextInput", _make_input)
+PromptInput = _load_attr(["lfx.io", "langflow.io"], "PromptInput", _make_input)
 Output = _load_attr(["lfx.io", "langflow.io"], "Output", _FallbackOutput)
 Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", _FallbackData)
+Message = _load_attr(["lfx.schema.message", "lfx.schema", "langflow.schema.message", "langflow.schema"], "Message", _FallbackMessage)
+
+
+DEFAULT_TEMPLATE = """You are a manufacturing data-analysis intent extractor.
+
+Return ONLY one valid JSON object. Do not include markdown fences.
+
+Task:
+- Classify the user request as data_question, process_execution, or unknown.
+- Extract dataset hints, metric hints, required query parameters, post-retrieval filters, grouping, sorting, top_n, calculations, and follow-up cues.
+- Required query parameters are values needed before source data retrieval, such as date when the dataset requires date.
+- Post-retrieval filters are values such as product, process, line, and domain term filters that can be applied with pandas after raw data retrieval.
+- If the user is asking to run a named operational process or end-to-end workflow, use request_type=process_execution.
+- If uncertain, use request_type=unknown and lower confidence.
+
+Output JSON schema:
+{schema}
+
+User question:
+{user_question}
+
+Recent chat history:
+{recent_history}
+
+Previous context:
+{context}
+
+Current data summary:
+{current_data}
+
+Available manufacturing domain:
+{domain_summary}
+"""
 
 
 def _make_data(payload: Dict[str, Any]) -> Any:
@@ -85,6 +126,19 @@ def _make_data(payload: Dict[str, Any]) -> Any:
             return Data(payload)
         except Exception:
             return _FallbackData(data=payload)
+
+
+def _make_message(text: str) -> Any:
+    try:
+        return Message(text=text)
+    except TypeError:
+        try:
+            return Message(content=text)
+        except TypeError:
+            try:
+                return Message(text)
+            except Exception:
+                return _FallbackMessage(text=text)
 
 
 def _payload_from_value(value: Any) -> Dict[str, Any]:
@@ -103,6 +157,12 @@ def _payload_from_value(value: Any) -> Dict[str, Any]:
         except Exception:
             return {}
     return {}
+
+
+def _main_context_from_value(value: Any) -> Dict[str, Any]:
+    payload = _payload_from_value(value)
+    main_context = payload.get("main_context")
+    return main_context if isinstance(main_context, dict) else {}
 
 
 def _unwrap(payload: Dict[str, Any], key: str) -> Dict[str, Any]:
@@ -155,7 +215,21 @@ def build_intent_prompt(
     user_question: str,
     agent_state_payload: Any,
     domain_payload: Any,
+    template_value: Any = None,
+    main_context_payload: Any = None,
 ) -> str:
+    main_context = _main_context_from_value(main_context_payload)
+    if main_context:
+        user_question = str(user_question or main_context.get("user_question") or "")
+        if agent_state_payload is None:
+            agent_state_payload = {"agent_state": main_context.get("agent_state", {})}
+        if domain_payload is None:
+            domain_payload = main_context.get("domain_payload") or {
+                "domain": main_context.get("domain", {}),
+                "domain_index": main_context.get("domain_index", {}),
+                "domain_errors": main_context.get("domain_errors", []),
+            }
+
     state_payload = _payload_from_value(agent_state_payload)
     agent_state = state_payload.get("agent_state")
     if not isinstance(agent_state, dict):
@@ -190,37 +264,19 @@ def build_intent_prompt(
         "confidence": 0.0,
     }
 
-    prompt = f"""You are a manufacturing data-analysis intent extractor.
-
-Return ONLY one valid JSON object. Do not include markdown fences.
-
-Task:
-- Classify the user request as data_question, process_execution, or unknown.
-- Extract dataset hints, metric hints, required query parameters, post-retrieval filters, grouping, sorting, top_n, calculations, and follow-up cues.
-- Required query parameters are values needed before source data retrieval, such as date when the dataset requires date.
-- Post-retrieval filters are values such as product, process, line, and domain term filters that can be applied with pandas after raw data retrieval.
-- If the user is asking to run a named operational process or end-to-end workflow, use request_type=process_execution.
-- If uncertain, use request_type=unknown and lower confidence.
-
-Output JSON schema:
-{json.dumps(schema, ensure_ascii=False, indent=2)}
-
-User question:
-{user_question}
-
-Recent chat history:
-{_compact_dict(recent_history)}
-
-Previous context:
-{_compact_dict(context)}
-
-Current data summary:
-{_compact_dict(current_data)}
-
-Available manufacturing domain:
-{_compact_dict(_domain_summary(domain, domain_index), limit=12000)}
-"""
-    return prompt
+    template = str(template_value or DEFAULT_TEMPLATE).strip()
+    values = {
+        "schema": json.dumps(schema, ensure_ascii=False, indent=2),
+        "user_question": user_question,
+        "recent_history": _compact_dict(recent_history),
+        "context": _compact_dict(context),
+        "current_data": _compact_dict(current_data),
+        "domain_summary": _compact_dict(_domain_summary(domain, domain_index), limit=12000),
+    }
+    try:
+        return template.format(**values)
+    except KeyError as exc:
+        raise ValueError(f"Template placeholder error: {exc}") from exc
 
 
 class BuildIntentPrompt(Component):
@@ -230,29 +286,55 @@ class BuildIntentPrompt(Component):
     name = "BuildIntentPrompt"
 
     inputs = [
-        MessageTextInput(name="user_question", display_name="User Question", info="Current user question."),
+        PromptInput(
+            name="template",
+            display_name="Template",
+            value=DEFAULT_TEMPLATE,
+            required=True,
+            info="Use {schema}, {user_question}, {recent_history}, {context}, {current_data}, and {domain_summary}.",
+        ),
+        DataInput(
+            name="main_context",
+            display_name="Main Context",
+            info="Output from Main Flow Context Builder. Preferred input for user question, state, and domain.",
+            input_types=["Data", "JSON"],
+        ),
+        MessageTextInput(name="user_question", display_name="User Question", info="Legacy direct question input.", advanced=True),
         DataInput(
             name="agent_state",
             display_name="Agent State",
-            info="Output from Session State Loader.",
+            info="Legacy direct state input. Prefer Main Context.",
             input_types=["Data", "JSON"],
+            advanced=True,
         ),
         DataInput(
             name="domain_payload",
             display_name="Domain Payload",
-            info="Domain Payload output from Domain JSON Loader.",
+            info="Legacy direct domain input. Prefer Main Context.",
             input_types=["Data", "JSON"],
+            advanced=True,
         ),
     ]
 
     outputs = [
-        Output(name="intent_prompt", display_name="Intent Prompt", method="build_prompt", types=["Data"]),
+        Output(name="prompt", display_name="Prompt Message", method="build_prompt", group_outputs=True, types=["Message"]),
+        Output(name="intent_prompt", display_name="Intent Prompt Payload", method="build_prompt_payload", group_outputs=True, types=["Data"]),
     ]
 
-    def build_prompt(self) -> Data:
+    def build_prompt_text(self) -> str:
         prompt = build_intent_prompt(
             getattr(self, "user_question", ""),
             getattr(self, "agent_state", None),
             getattr(self, "domain_payload", None) or getattr(self, "domain", None),
+            getattr(self, "template", "") or DEFAULT_TEMPLATE,
+            getattr(self, "main_context", None),
         )
+        self.status = {"prompt_chars": len(prompt)}
+        return prompt
+
+    def build_prompt(self) -> Message:
+        return _make_message(self.build_prompt_text())
+
+    def build_prompt_payload(self) -> Data:
+        prompt = self.build_prompt_text()
         return _make_data({"intent_prompt": prompt, "prompt": prompt})

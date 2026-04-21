@@ -979,10 +979,10 @@ Domain JSON Loader
   -> {"domain": {...}, "domain_index": {...}}
 
 Build Intent Prompt
-  -> {"prompt": "질문과 도메인 정보를 보고 intent JSON을 만들어라..."}
+  -> Message("질문과 도메인 정보를 보고 intent JSON을 만들어라...")
 
-LLM JSON Caller
-  -> {"llm_text": "{\"request_type\":\"data_question\", ...}"}
+built-in LLM node
+  -> Message("{\"request_type\":\"data_question\", ...}")
 
 Parse Intent JSON
   -> {"intent_raw": {"request_type": "data_question", ...}}
@@ -1124,7 +1124,98 @@ class MyCustomNode(Component):
 
 이 템플릿을 기반으로 input과 output payload만 바꿔도 대부분의 단순 Langflow 노드를 만들 수 있다.
 
-## 24. 공식 참고 문서
+## 24. 프로젝트 적용 예시: Domain Item Authoring Flow
+
+이 문서는 Langflow Custom Node 코드 작성법을 설명하는 일반 가이드다. 현재 프로젝트에서 이 패턴이 실제로 적용된 큰 예시는 새 도메인 정리 flow인 `domain_item_authoring_flow`다.
+
+상세한 연결 순서, 각 노드의 입출력 payload, 여러 줄 입력이 MongoDB item 여러 건으로 저장되는 방식, built-in LLM 연결 방법은 아래 문서에 따로 정리했다.
+
+```text
+docs/17_LANGFLOW_DOMAIN_ITEM_FLOW_GUIDE.md
+```
+
+핵심 연결 흐름은 다음과 같다.
+
+```text
+Raw Domain Text Input
+  -> Domain Text Splitter
+  -> Domain Item Router
+  -> MongoDB Existing Domain Item Loader
+  -> Domain Item Prompt Context Builder
+  -> Domain Item Prompt Template
+  -> built-in LLM node
+  -> Parse Domain Item JSON
+  -> Normalize Domain Item
+  -> Domain Item Conflict Checker
+  -> MongoDB Domain Item Saver
+```
+
+이 flow에서 특히 확인할 custom node 작성 패턴은 다음이다.
+
+- 긴 사용자 입력에는 `MultilineInput`을 사용한다.
+- custom node 사이의 구조화 데이터는 `Data(data={...})`로 주고받는다.
+- built-in LLM에 연결할 prompt는 `Message` 타입 output으로 내보낸다.
+- LLM 결과 파싱, 정규화, 검증, 저장은 각각 별도 노드로 분리한다.
+- MongoDB 저장은 `gbn + key` 단위 item document로 한다.
+
+## 25. 프로젝트 적용 예시: Main Data Answer Flow
+
+이 문서는 custom node를 어떻게 작성하는지 설명하는 문서이므로, Main Flow의 모든 연결선을 이 문서 안에 길게 반복하지는 않는다.
+
+실제 Langflow canvas에서 어떤 노드를 어떤 순서로 연결해야 하는지는 아래 문서에 정리되어 있다.
+
+```text
+langflow/data_answer_flow/README.md
+```
+
+이 문서에서 특히 확인해야 하는 내용은 다음이다.
+
+- `Query Mode Decider` 이후 11~19번 노드 연결 순서
+- `Dummy Data Retriever`와 `OracleDB Data Retriever` 중 하나를 선택해서 연결하는 방법
+- built-in LLM 노드를 어디에 넣어야 하는지
+- `Build Intent Prompt.prompt -> built-in LLM -> Parse Intent JSON.llm_result` 연결
+- `Build Pandas Analysis Prompt.prompt -> built-in LLM -> Parse Pandas Analysis JSON.llm_output` 연결
+- `Build Answer Prompt.prompt -> built-in LLM -> Final Answer Builder.answer_llm_output` 연결
+- `Final Answer Builder.next_state`를 다음 턴 state로 재사용하는 방법
+
+핵심 연결 흐름은 다음과 같다.
+
+```text
+Build Intent Prompt
+  -> built-in LLM node
+  -> Parse Intent JSON
+  -> Normalize Intent With Domain
+  -> Request Type Router
+  -> Query Mode Decider
+  -> Retrieval Plan Builder
+  -> Dummy Data Retriever 또는 OracleDB Data Retriever
+  -> Analysis Base Builder
+  -> Build Pandas Analysis Prompt
+  -> built-in LLM node
+  -> Parse Pandas Analysis JSON
+  -> Execute Pandas Analysis
+  -> Build Answer Prompt
+  -> built-in LLM node
+  -> Final Answer Builder
+```
+
+각 노드의 세부 역할은 아래 폴더에 노드 번호별 문서로 정리되어 있다.
+
+```text
+langflow/data_answer_flow/detail_desc/
+```
+
+예를 들어 `17_execute_pandas_analysis.md`는 LLM이 만든 pandas 코드를 어떤 기준으로 검증하고 실행하는지 설명하고, `19_final_answer_builder.md`는 최종 응답과 다음 턴 state를 어떻게 만드는지 설명한다.
+
+Main Flow에서 특히 확인할 custom node 작성 패턴은 다음이다.
+
+- 조회 계획, 조회 실행, 분석 테이블 구성, pandas prompt 생성, pandas 실행, 답변 prompt 생성, state 저장을 서로 다른 노드로 분리한다.
+- built-in LLM을 쓰는 구간 앞에는 `Message` 타입 prompt output을 만든다. 현재 `Build Intent Prompt`, `Build Pandas Analysis Prompt`, `Build Answer Prompt`가 이 패턴을 따른다.
+- LLM output은 바로 실행하지 않고 JSON parser 노드를 거친다.
+- 데이터 조회 노드는 더미 조회와 Oracle 조회가 같은 `retrieval_result` output shape을 반환하도록 맞춘다.
+- 최종 노드는 `response`, `tool_results`, `current_data`, `extracted_params`, `state_json`을 함께 반환해서 후속 질문을 지원한다.
+
+## 26. 공식 참고 문서
 
 - [Create custom Python components](https://docs.langflow.org/components-custom-components)
 - [Components overview](https://docs.langflow.org/concepts-components)

@@ -1,0 +1,108 @@
+{
+  "domain_patch": {
+    "terms": {
+      "AUTO_PRODUCT": {
+        "display_name": "Auto향",
+        "aliases": ["Auto향", "Auto", "자동차향", "차량향"],
+        "filter": {
+          "column": "MCP_NO",
+          "operator": "suffix_in",
+          "values": ["I", "O", "N", "P", "1", "V"]
+        },
+        "description": "MCP_NO suffix 기준 자동차향 제품 분류"
+      }
+    },
+    "datasets": {
+      "production": {
+        "display_name": "생산 데이터",
+        "keywords": ["생산", "생산량", "production"],
+        "required_params": ["date"],
+        "columns": [
+          {"name": "WORK_DT", "type": "date"},
+          {"name": "OPER_NAME", "type": "string"},
+          {"name": "공정군", "type": "string"},
+          {"name": "라인", "type": "string"},
+          {"name": "MODE", "type": "string"},
+          {"name": "DEN", "type": "string"},
+          {"name": "production", "type": "number"}
+        ]
+      },
+      "target": {
+        "display_name": "목표 데이터",
+        "keywords": ["목표", "목표량", "target"],
+        "required_params": ["date"],
+        "columns": [
+          {"name": "WORK_DT", "type": "date"},
+          {"name": "OPER_NAME", "type": "string"},
+          {"name": "공정군", "type": "string"},
+          {"name": "라인", "type": "string"},
+          {"name": "MODE", "type": "string"},
+          {"name": "DEN", "type": "string"},
+          {"name": "target", "type": "number"}
+        ]
+      },
+      "wip": {
+        "display_name": "WIP 데이터",
+        "keywords": ["wip", "재공"],
+        "required_params": ["date"],
+        "columns": [
+          {"name": "WORK_DT", "type": "date"},
+          {"name": "OPER_NAME", "type": "string"},
+          {"name": "상태", "type": "string"}
+        ]
+      },
+      "yield": {
+        "display_name": "수율 데이터",
+        "keywords": ["수율", "양품률", "yield"],
+        "required_params": ["date"],
+        "columns": [
+          {"name": "WORK_DT", "type": "date"},
+          {"name": "OPER_NAME", "type": "string"},
+          {"name": "yield_rate", "type": "number"}
+        ]
+      }
+    },
+    "metrics": {
+      "achievement_rate": {
+        "display_name": "생산 달성율",
+        "aliases": ["생산 달성율", "생산 달성률", "달성율", "달성률"],
+        "required_datasets": ["production", "target"],
+        "required_columns": ["production", "target"],
+        "source_columns": [
+          {"dataset_key": "production", "column": "production", "role": "numerator"},
+          {"dataset_key": "target", "column": "target", "role": "denominator"}
+        ],
+        "calculation_mode": "ratio",
+        "formula": "sum(production.production) / sum(target.target) * 100",
+        "output_column": "achievement_rate",
+        "default_group_by": ["OPER_NAME"],
+        "default_output_unit": "%"
+      },
+      "hold_anomaly_check": {
+        "display_name": "HOLD 이상여부",
+        "aliases": ["HOLD 이상여부", "홀드 체크", "HOLD 이상"],
+        "required_datasets": ["wip"],
+        "required_columns": ["상태"],
+        "source_columns": [
+          {"dataset_key": "wip", "column": "상태", "role": "status_field"}
+        ],
+        "calculation_mode": "condition_flag",
+        "condition": "상태 in ['HOLD', 'REWORK']",
+        "decision_rule": "상태가 HOLD 또는 REWORK이면 이상, 그 외에는 정상",
+        "output_column": "hold_anomaly_flag"
+      }
+    },
+    "join_rules": [
+      {
+        "name": "production_target_join",
+        "datasets": ["production", "target"],
+        "base_dataset": "production",
+        "join_dataset": "target",
+        "keys": ["WORK_DT", "OPER_NAME", "공정군", "라인", "MODE", "DEN"],
+        "join_keys": ["WORK_DT", "OPER_NAME", "공정군", "라인", "MODE", "DEN"],
+        "join_type": "left"
+      }
+    ]
+  },
+  "warnings": []
+}

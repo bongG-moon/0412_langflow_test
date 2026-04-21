@@ -1,0 +1,39 @@
+{
+  "items": [
+    {
+      "gbn": "metrics",
+      "source_note_id": "note_1",
+      "key": "production_achievement_rate",
+      "payload": {
+        "display_name": "생산 달성률",
+        "aliases": ["달성률", "달성율", "목표 대비 생산"],
+        "required_datasets": ["production", "target"],
+        "required_columns": ["production", "target"],
+        "source_columns": [
+          {"dataset_key": "production", "column": "production", "role": "numerator"},
+          {"dataset_key": "target", "column": "target", "role": "denominator"}
+        ],
+        "calculation_mode": "ratio",
+        "formula": "production / target",
+        "output_column": "achievement_rate",
+        "default_group_by": ["OPER_NAME"],
+        "pandas_hint": "group by OPER_NAME and calculate production / target"
+      },
+      "warnings": []
+    },
+    {
+      "gbn": "join_rules",
+      "source_note_id": "note_2",
+      "key": "production_target_join",
+      "payload": {
+        "base_dataset": "production",
+        "join_dataset": "target",
+        "join_type": "left",
+        "join_keys": ["WORK_DT", "OPER_NAME", "MODE", "DEN"],
+        "description": "Join production and target data for achievement-rate calculations."
+      },
+      "warnings": []
+    }
+  ],
+  "unmapped_text": ""
+}
