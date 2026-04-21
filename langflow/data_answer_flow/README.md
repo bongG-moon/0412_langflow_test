@@ -4,22 +4,10 @@
 
 이번 구조에서는 `MongoDB Domain Item Payload Loader`의 `domain_payload`를 여러 노드에 직접 연결하지 않는다. 대신 `Main Flow Context Builder`가 사용자 질문, session state, domain payload를 한 번에 묶어서 `main_context`로 만들고, 이후 노드들은 이 값을 우선 사용한다.
 
-## 핵심 변경
+## Main Flow Context Builder 기준 연결
 
-기존 방식:
-
-```text
-MongoDB Domain Item Payload Loader.domain_payload
--> Build Intent Prompt.domain_payload
--> Normalize Intent With Domain.domain_payload
--> Query Mode Decider.domain_payload
--> Retrieval Plan Builder.domain_payload
--> Dummy/Oracle Retriever.domain_payload
--> Analysis Base Builder.domain_payload
--> Build Pandas Analysis Prompt.domain_payload
-```
-
-새 방식:
+현재 main flow에서는 domain/state/question을 `Main Flow Context Builder`에 한 번만 연결한다.
+`domain_payload`를 `Build Intent Prompt`, `Normalize Intent With Domain`, `Query Mode Decider` 같은 뒤 노드들에 직접 반복 연결하지 않는다.
 
 ```text
 MongoDB Domain Item Payload Loader.domain_payload
@@ -152,7 +140,7 @@ Query Mode Decider.query_mode_decision
 -> Retrieval Plan Builder.query_mode_decision
 ```
 
-`Normalize Intent With Domain.intent` output 안에 `main_context`가 같이 들어간다. 따라서 `Request Type Router.agent_state`, `Query Mode Decider.domain_payload`, `Retrieval Plan Builder.domain_payload`는 새 구조에서는 연결하지 않아도 된다.
+`Normalize Intent With Domain.intent` output 안에 `main_context`가 같이 들어간다. 따라서 Router, Query Mode, Retrieval Plan 쪽에는 state/domain을 다시 직접 연결하지 않아도 된다.
 
 ### 4. 데이터 조회
 
@@ -207,9 +195,13 @@ built-in LLM output
 
 Execute Pandas Analysis.analysis_result
 -> Final Answer Builder.analysis_result
+
+Final Answer Builder.answer_message
+-> Chat Output or Playground display output
 ```
 
 `Final Answer Builder.next_state`를 다음 질문의 `Previous State JSON Input`에 넣으면 연속 질문에서 `current_data`를 재사용할 수 있다.
+`Final Answer Builder.final_result`는 JSON/Data 전체 payload 확인용이고, Playground에서 짧게 보고 싶을 때는 `answer_message`만 출력에 연결하는 것을 권장한다.
 
 ## OracleDB Connections JSON 예시
 
@@ -280,6 +272,7 @@ Build Answer Prompt.prompt
 ## Final Output과 MongoDB Table 저장
 
 `Final Answer Builder`는 Playground 출력이 너무 커지지 않도록 원본 table 데이터를 MongoDB에 저장하고, flow output에는 참조 id와 마지막 분석 결과 preview만 남긴다.
+또한 `answer_message` output을 제공하므로, Chat Output에는 긴 JSON인 `final_result` 대신 `answer_message`를 연결하면 된다.
 
 기본 저장 위치:
 
@@ -313,6 +306,16 @@ analysis_result  pandas 전처리 후 마지막 결과 table
 ```
 
 원본 table 전체가 필요하면 `table_storage_status.table_refs[].table_ref_id` 값으로 `manufacturing_flow_tables`에서 조회한다.
+
+표시용 output:
+
+```text
+Final Answer Builder.answer_message
+-> Chat Output
+```
+
+`answer_message`는 답변 문장, row count, column 목록, table reference id, 최대 `Display Row Limit`만큼의 markdown table preview만 보여준다.
+`final_result`와 `next_state`는 후속 질문과 디버깅을 위한 JSON/Data output으로 유지한다.
 
 ## Knowledge Base / Smart Router 사용 여부
 

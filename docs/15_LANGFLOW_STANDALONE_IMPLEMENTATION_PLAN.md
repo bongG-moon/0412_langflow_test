@@ -1399,18 +1399,26 @@ Custom Component로 구현한다.
 | `Domain JSON Input` | `00_domain_json_input.py` | 도메인 JSON 문자열 |
 | `Previous State JSON Input` | `00_previous_state_json_input.py` | 이전 턴의 `state_json`; 첫 턴은 빈 값 |
 | `Session ID Text Input` | built-in Text Input | `default` 같은 세션 ID; 선택 |
+| `Main Flow Context Builder` | `02_main_flow_context_builder.py` | 사용자 질문, session state, domain payload를 하나로 묶는 현재 권장 연결 노드 |
 
 ```text
 Chat Input
   -> Session State Loader.user_question
-  -> Build Intent Prompt.user_question
-  -> Normalize Intent With Domain.user_question
+
+Chat Input
+  -> Main Flow Context Builder.user_question
 
 Previous State JSON Input
   -> Session State Loader.previous_state_payload
 
 Domain JSON Input
   -> Domain JSON Loader.domain_json_payload
+
+Session State Loader.agent_state
+  -> Main Flow Context Builder.agent_state
+
+Domain JSON Loader.domain_payload
+  -> Main Flow Context Builder.domain_payload
 ```
 
 각 LLM Caller 노드는 공통 config 연결 없이 자기 input으로 `llm_api_key`, `model_name`, `temperature`, `timeout_seconds`를 받는다.
@@ -1422,17 +1430,14 @@ Domain JSON Input
 | From | To | Required |
 | --- | --- | --- |
 | `Chat Input` | `Session State Loader.user_question` | Yes |
-| `Chat Input` | `Build Intent Prompt.user_question` | Yes |
-| `Chat Input` | `Normalize Intent With Domain.user_question` | Yes |
+| `Chat Input` | `Main Flow Context Builder.user_question` | Yes |
 | `Previous State JSON Input.previous_state_payload` | `Session State Loader.previous_state_payload` | Yes |
 | `Session ID Text Input` | `Session State Loader.session_id` | Optional |
 | `Domain JSON Input.domain_json_payload` | `Domain JSON Loader.domain_json_payload` | Yes |
-| `Session State Loader.agent_state` | `Build Intent Prompt.agent_state` | Yes |
-| `Session State Loader.agent_state` | `Normalize Intent With Domain.agent_state` | Yes |
-| `Session State Loader.agent_state` | `Request Type Router.agent_state` | Yes |
-| `Domain JSON Loader.domain_payload` | `Build Intent Prompt.domain_payload` | Yes |
-| `Domain JSON Loader.domain_payload` | `Normalize Intent With Domain.domain_payload` | Yes |
-| `Domain JSON Loader.domain_payload` | `Query Mode Decider.domain_payload` | Yes |
+| `Session State Loader.agent_state` | `Main Flow Context Builder.agent_state` | Yes |
+| `Domain JSON Loader.domain_payload` | `Main Flow Context Builder.domain_payload` | Yes |
+| `Main Flow Context Builder.main_context` | `Build Intent Prompt.main_context` | Yes |
+| `Main Flow Context Builder.main_context` | `Normalize Intent With Domain.main_context` | Yes |
 | `Build Intent Prompt.intent_prompt` | `LLM JSON Caller.prompt` | Yes |
 | `LLM JSON Caller.llm_result` | `Parse Intent JSON.llm_result` | Yes |
 | `Parse Intent JSON.intent_raw` | `Normalize Intent With Domain.intent_raw` | Yes |
@@ -1441,14 +1446,14 @@ Domain JSON Input
 
 ```text
 Session State Loader.agent_state
-  -> Build Intent Prompt.agent_state
-  -> Normalize Intent With Domain.agent_state
-  -> Request Type Router.agent_state
+  -> Main Flow Context Builder.agent_state
 
 Domain JSON Loader.domain_payload
-  -> Build Intent Prompt.domain_payload
-  -> Normalize Intent With Domain.domain_payload
-  -> Query Mode Decider.domain_payload
+  -> Main Flow Context Builder.domain_payload
+
+Main Flow Context Builder.main_context
+  -> Build Intent Prompt.main_context
+  -> Normalize Intent With Domain.main_context
 
 Build Intent Prompt.intent_prompt
   -> LLM JSON Caller.prompt

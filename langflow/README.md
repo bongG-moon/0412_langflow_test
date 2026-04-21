@@ -66,6 +66,15 @@ built-in LLM node
 19_final_answer_builder.py
 ```
 
+For user-facing Playground output, connect:
+
+```text
+Final Answer Builder.answer_message
+-> Chat Output
+```
+
+Use `Final Answer Builder.final_result` only when you need the full JSON/Data payload for debugging or downstream state handling.
+
 For the detailed post-query-mode wiring, see:
 
 ```text
@@ -174,7 +183,7 @@ data_answer_flow / MongoDB Domain Item Payload Loader
 
 `datagov` is the default MongoDB database name. The default item collection name is `manufacturing_domain_items`. If you want to store domain items somewhere else, change the advanced `Database Name` or `Collection Name` inputs in all three nodes.
 
-`Build Intent Prompt.user_question`, `Build Intent Prompt.agent_state`, `Build Intent Prompt.domain_payload`, `Normalize Intent With Domain.domain_payload`, `Query Mode Decider.domain_payload`, and similar direct inputs remain available as legacy/advanced inputs. In the current canvas, prefer `Main Flow Context Builder.main_context` and the propagated payloads instead.
+Some direct state/domain/question inputs remain available as legacy advanced inputs for local tests. In the current canvas, prefer `Main Flow Context Builder.main_context` and the propagated payloads instead of wiring repeated `domain_payload` edges.
 
 Legacy/custom LLM fallback:
 

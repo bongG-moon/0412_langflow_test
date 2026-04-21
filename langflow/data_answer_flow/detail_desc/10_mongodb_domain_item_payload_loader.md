@@ -41,7 +41,8 @@ Collection Name: manufacturing_domain_items
 다음 연결:
 
 ```text
-MongoDB Domain Item Payload Loader.domain_payload -> Build Intent Prompt.domain_payload
-MongoDB Domain Item Payload Loader.domain_payload -> Normalize Intent With Domain.domain_payload
-MongoDB Domain Item Payload Loader.domain_payload -> Query Mode Decider.domain_payload
+MongoDB Domain Item Payload Loader.domain_payload
+-> Main Flow Context Builder.domain_payload
 ```
+
+현재 main flow에서는 이 loader의 output을 `Main Flow Context Builder`에 한 번만 연결한다. 이후 `Build Intent Prompt`, `Normalize Intent With Domain`, `Query Mode Decider` 등은 `main_context` 또는 앞 노드 payload 안에 포함된 `main_context`를 통해 domain 정보를 읽는다.

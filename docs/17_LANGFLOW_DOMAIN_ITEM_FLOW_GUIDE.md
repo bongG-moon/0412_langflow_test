@@ -523,18 +523,26 @@ join_rules:production_target_join
 langflow/data_answer_flow/10_mongodb_domain_item_payload_loader.py
 ```
 
-연결:
+현재 Main Flow 연결:
 
 ```text
 MongoDB Domain Item Payload Loader.domain_payload
--> Build Intent Prompt.domain_payload
+-> Main Flow Context Builder.domain_payload
 
-MongoDB Domain Item Payload Loader.domain_payload
--> Normalize Intent With Domain.domain_payload
+Session State Loader.agent_state
+-> Main Flow Context Builder.agent_state
 
-MongoDB Domain Item Payload Loader.domain_payload
--> Query Mode Decider.domain_payload
+User Question
+-> Main Flow Context Builder.user_question
+
+Main Flow Context Builder.main_context
+-> Build Intent Prompt.main_context
+
+Main Flow Context Builder.main_context
+-> Normalize Intent With Domain.main_context
 ```
+
+`Normalize Intent With Domain` 이후에는 `main_context`가 payload 안에 같이 전달된다. 따라서 `Query Mode Decider`, `Retrieval Plan Builder`, `Dummy Data Retriever`, `OracleDB Data Retriever`, `Analysis Base Builder`, `Build Pandas Analysis Prompt`에는 `domain_payload`를 다시 직접 연결하지 않아도 된다.
 
 이 loader는 MongoDB의 `status=active` item만 읽어서 기존 Main Flow가 기대하는 `domain_payload`로 변환한다.
 
@@ -862,14 +870,22 @@ Main Flow 연결:
 
 ```text
 MongoDB Domain Item Payload Loader.domain_payload
--> Build Intent Prompt.domain_payload
+-> Main Flow Context Builder.domain_payload
 
-MongoDB Domain Item Payload Loader.domain_payload
--> Normalize Intent With Domain.domain_payload
+Session State Loader.agent_state
+-> Main Flow Context Builder.agent_state
 
-MongoDB Domain Item Payload Loader.domain_payload
--> Query Mode Decider.domain_payload
+User Question
+-> Main Flow Context Builder.user_question
+
+Main Flow Context Builder.main_context
+-> Build Intent Prompt.main_context
+
+Main Flow Context Builder.main_context
+-> Normalize Intent With Domain.main_context
 ```
+
+이후 노드들은 앞 노드 payload 안에 포함된 `main_context`를 계속 전달받으므로 domain 관련 선을 여러 번 그리지 않는다.
 
 ### 13.8 이 flow를 수정할 때의 기준
 

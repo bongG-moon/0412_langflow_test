@@ -18,6 +18,7 @@ collection_name
 ```text
 final_result
 next_state
+answer_message
 ```
 
 ## 역할
@@ -29,6 +30,7 @@ next_state
 - `current_data`와 `source_snapshots`를 state에 저장해 후속 질문에서 재사용할 수 있게 한다.
 - Playground 출력이 너무 커지지 않도록 원본 table은 MongoDB에 저장하고 `table_ref_id`만 반환한다.
 - 마지막 pandas 분석 결과는 `Output Row Limit`만큼 preview로 남긴다.
+- Playground나 Chat Output에는 `answer_message`를 연결해 긴 JSON 대신 짧은 답변과 markdown table preview만 표시할 수 있다.
 
 ## MongoDB 저장
 
@@ -75,3 +77,14 @@ Final Answer Builder.next_state
 ```
 
 Langflow canvas에서 다음 질문을 수동 테스트할 때는 `next_state.state_json` 값을 Previous State JSON Input에 넣으면 된다.
+
+## Playground 표시 연결
+
+```text
+Final Answer Builder.answer_message
+-> Chat Output
+```
+
+`final_result`는 전체 JSON payload라 Playground에서 매우 길게 보일 수 있다. 사용자에게 보이는 답변은 `answer_message`를 사용하고, `final_result`는 디버깅이나 외부 시스템 연동용으로만 확인하는 것을 권장한다.
+
+`Display Row Limit` advanced input으로 message에 표시할 preview row 수를 조절할 수 있다. 기본값은 10이다.

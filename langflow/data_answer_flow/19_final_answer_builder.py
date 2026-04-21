@@ -58,6 +58,12 @@ class _FallbackData:
         self.data = data or {}
 
 
+class _FallbackMessage:
+    def __init__(self, text: str | None = None, **kwargs: Any):
+        self.text = text or str(kwargs.get("content") or "")
+        self.content = self.text
+
+
 def _make_input(**kwargs: Any) -> _FallbackInput:
     return _FallbackInput(**kwargs)
 
@@ -71,6 +77,7 @@ DataInput = _load_attr(["lfx.io", "langflow.io"], "DataInput", _make_input)
 MessageTextInput = _load_attr(["lfx.io", "langflow.io"], "MessageTextInput", _make_input)
 Output = _load_attr(["lfx.io", "langflow.io"], "Output", _FallbackOutput)
 Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", _FallbackData)
+Message = _load_attr(["lfx.schema.message", "lfx.schema", "langflow.schema.message", "langflow.schema"], "Message", _FallbackMessage)
 
 
 MONGO_URI = "mongodb+srv://bonggeon:qhdrjs123@datagov.5qcxapn.mongodb.net/?retryWrites=true&w=majority&appName=datagov"
@@ -86,6 +93,19 @@ def _make_data(payload: Dict[str, Any]) -> Any:
             return Data(payload)
         except Exception:
             return _FallbackData(data=payload)
+
+
+def _make_message(text: str) -> Any:
+    try:
+        return Message(text=text)
+    except TypeError:
+        try:
+            return Message(content=text)
+        except TypeError:
+            try:
+                return Message(text)
+            except Exception:
+                return _FallbackMessage(text=text)
 
 
 def _payload_from_value(value: Any) -> Dict[str, Any]:
@@ -168,6 +188,74 @@ def _json_safe(value: Any) -> Any:
         return json.loads(json.dumps(value, ensure_ascii=False, default=str))
     except Exception:
         return str(value)
+
+
+def _format_cell(value: Any, max_chars: int = 80) -> str:
+    if isinstance(value, (dict, list)):
+        text = json.dumps(value, ensure_ascii=False, default=str)
+    elif value is None:
+        text = ""
+    else:
+        text = str(value)
+    text = text.replace("\r", " ").replace("\n", " ").replace("|", "\\|")
+    return text if len(text) <= max_chars else text[: max_chars - 3] + "..."
+
+
+def _markdown_table(rows: Any, columns: Any, row_limit: int) -> str:
+    if row_limit <= 0 or not isinstance(rows, list):
+        return ""
+    preview_rows = [row for row in rows[:row_limit] if isinstance(row, dict)]
+    if not preview_rows:
+        return ""
+    if isinstance(columns, list) and columns:
+        selected_columns = [str(column) for column in columns[:8]]
+    else:
+        selected_columns = [str(column) for column in preview_rows[0].keys()][:8]
+    if not selected_columns:
+        return ""
+    header = "| " + " | ".join(selected_columns) + " |"
+    divider = "| " + " | ".join(["---"] * len(selected_columns)) + " |"
+    body = [
+        "| " + " | ".join(_format_cell(row.get(column)) for column in selected_columns) + " |"
+        for row in preview_rows
+    ]
+    return "\n".join([header, divider, *body])
+
+
+def _build_answer_display_text(final_result: Dict[str, Any], display_row_limit_value: Any = 10) -> str:
+    response = str(final_result.get("response") or "").strip()
+    analysis_result = final_result.get("analysis_result") if isinstance(final_result.get("analysis_result"), dict) else {}
+    rows = analysis_result.get("data") if isinstance(analysis_result.get("data"), list) else []
+    columns = analysis_result.get("columns") if isinstance(analysis_result.get("columns"), list) else []
+    row_count = analysis_result.get("row_count", len(rows))
+    table_ref_id = str(analysis_result.get("table_ref_id") or "").strip()
+    data_is_preview = bool(analysis_result.get("data_is_preview"))
+    storage_status = final_result.get("table_storage_status") if isinstance(final_result.get("table_storage_status"), dict) else {}
+    try:
+        display_row_limit = max(0, int(display_row_limit_value or 10))
+    except Exception:
+        display_row_limit = 10
+
+    parts = [response] if response else []
+    facts: list[str] = []
+    if row_count not in (None, ""):
+        facts.append(f"- Result rows: {row_count}")
+    if columns:
+        facts.append(f"- Columns: {', '.join([str(column) for column in columns[:12]])}")
+    if table_ref_id:
+        facts.append(f"- Full table ref: `{table_ref_id}`")
+    if storage_status.get("errors"):
+        facts.append(f"- Table storage warning: {'; '.join([str(item) for item in storage_status.get('errors', [])])}")
+    if facts:
+        parts.append("\n".join(facts))
+
+    table = _markdown_table(rows, columns, display_row_limit)
+    if table:
+        preview_note = f"Preview rows shown: {min(display_row_limit, len(rows))}"
+        if data_is_preview:
+            preview_note += " (full result is stored by reference when table_ref_id is present)"
+        parts.append(f"{preview_note}\n\n{table}")
+    return "\n\n".join(parts).strip() or "No displayable answer was produced."
 
 
 def _resolve_db_name(value: Any = None) -> str:
@@ -537,11 +625,13 @@ class FinalAnswerBuilder(Component):
         DataInput(name="analysis_result", display_name="Analysis Result", info="Output from Execute Pandas Analysis.", input_types=["Data", "JSON"]),
         MessageTextInput(name="store_tables", display_name="Store Tables In MongoDB", value="true", advanced=True),
         MessageTextInput(name="output_row_limit", display_name="Output Row Limit", value="200", advanced=True),
+        MessageTextInput(name="display_row_limit", display_name="Display Row Limit", value="10", advanced=True),
         MessageTextInput(name="db_name", display_name="Mongo Database Name", value=DB_NAME, advanced=True),
         MessageTextInput(name="collection_name", display_name="Mongo Table Collection", value=TABLE_COLLECTION, advanced=True),
     ]
 
     outputs = [
+        Output(name="answer_message", display_name="Answer Message", method="build_answer_message", group_outputs=True, types=["Message"]),
         Output(name="final_result", display_name="Final Result", method="build_final_result", group_outputs=True, types=["Data"]),
         Output(name="next_state", display_name="Next State", method="build_next_state", group_outputs=True, types=["Data"]),
     ]
@@ -572,6 +662,16 @@ class FinalAnswerBuilder(Component):
             else 0,
         }
         return _make_data(final_result)
+
+    def build_answer_message(self) -> Message:
+        payload = self._payload()
+        final_result = payload.get("final_result", {})
+        text = _build_answer_display_text(final_result, getattr(self, "display_row_limit", "10"))
+        self.status = {
+            "display_chars": len(text),
+            "display_row_limit": getattr(self, "display_row_limit", "10"),
+        }
+        return _make_message(text)
 
     def build_next_state(self) -> Data:
         payload = self._payload()

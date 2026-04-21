@@ -570,12 +570,11 @@ def build_domain_document(self) -> Data:
 ## 다음 노드 연결
 
 ```text
-Domain JSON Loader.domain_payload -> Build Intent Prompt.domain_payload
-
-Domain JSON Loader.domain_payload -> Normalize Intent With Domain.domain_payload
-
-Domain JSON Loader.domain_payload -> Query Mode Decider.domain_payload
+Domain JSON Loader.domain_payload
+-> Main Flow Context Builder.domain_payload
 ```
+
+`Domain JSON Loader`는 MongoDB를 쓰지 않는 수동 JSON 테스트용 fallback이다. 현재 main flow의 기본 구조에서는 MongoDB loader든 수동 JSON loader든 모두 `Main Flow Context Builder.domain_payload`로 연결한 뒤, `main_context`를 통해 뒤 노드로 전달한다.
 
 ## 학습 포인트
 
