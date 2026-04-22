@@ -1,0 +1,23 @@
+DP,D/P는 WET1, WET2, L/T1, L/T2, B/G1, B/G2, H/S1, H/S2, W/S1, W/S2, WSD1, WSD2, WEC1, WEC2, WLS1, WLS2, WVI, UV, C/C1 공정 그룹을 의미한다.
+WET는 WET1, WET2 공정을 의미한다.
+LT,L/T는 L/T1, L/T2 공정을 의미한다.
+BG,B/G는 B/G1, B/G2 공정을 의미한다.
+D/A,DA는 D/A1, D/A2, D/A3, D/A4, D/A5, D/A6 공정 그룹을 의미한다.
+D/I,DI,DVI는 D/I 공정을 의미한다.
+D/S,DS는 PKG_TYPE1이 FCBGA인 자재만 대상으로 D/S1 공정을 의미한다.
+FCB는 FCB1, FCB2, FCB/H 공정 그룹을 의미한다.
+B/M,BM,비엠은 B/M 공정을 의미한다.
+투입량은 PKG INPUT 공정의 생산 실적으로 OPER_DESC 값이 INPUT인 경우를 말한다.
+제품, PRODUCT, DEVICE, 자재는 같은 의미로 사용한다.
+POP 제품은 MODE가 LP로 시작하고 PKG_TYPE1이 LFBGA, TFBGA, UFBGA, VFBGA, WFBGA 중 하나이며 MCP_SALES_NO 값이 존재하는 경우를 말한다.
+MOBILE 제품은 MODE가 LP로 시작하고 PKG_TYPE1이 LFBGA, TFBGA, UFBGA, VFBGA, WFBGA 중 하나이며 MCP_SALES_NO 값이 NULL이거나 빈칸인 경우를 말한다.
+AUTO향, 오토모티브향, 오토향은 MCP_SALES_NO 값이 존재하고 맨 뒷자리 문자가 I,O,N,P,Q,V 중 하나인 경우를 말한다.
+HBM, 3DS 제품은 TSV_DIE_TYP 컬럼 값이 NULL이나 빈칸이 아닌 경우를 말한다.
+2Hi, 4Hi, 8Hi 구분은 TSV_DIE_TYP 컬럼 값으로 구분한다.
+유연제품, 유연생산 제품, 유연작업제품은 FAB, DEVICE, OWNER, GRADE가 동일해서 연속 작업이 가능한 제품을 말한다.
+저조제품, 부족제품, 부진제품은 생산 보유 CAPA보다 생산 실적이 적은 제품을 말한다.
+마지막 투입은 해당 제품이 현재 투입이 없는 상태에서 가장 최근에 투입된 날짜를 말한다.
+스케쥴, 생산계획, 일별 투입계획, SCHD, 투입계획은 모두 생산계획 데이터를 의미한다.
+생산 달성율은 생산량 / 목표량으로 계산하며 생산 데이터와 목표 데이터를 함께 사용한다.
+CAPA 대비 생산율은 생산량 / capa_qty로 계산하며 생산 데이터와 CAPA 데이터를 함께 사용한다.
+목표 미달 수량은 목표량 - 생산량으로 계산한다.

@@ -8,6 +8,7 @@
 | --- | --- |
 | `data_answer_flow` | 사용자 질문에 대해 domain 로딩, intent 추출, query mode 판단, 데이터 조회, pandas 전처리, 최종 답변과 다음 state 생성을 수행하는 main flow |
 | `domain_item_authoring_flow` | 자연어 domain 설명을 `products`, `process_groups`, `terms`, `datasets`, `metrics`, `join_rules` item으로 나누어 MongoDB에 저장하는 domain 작성 flow |
+| `registration_web` | 도메인 지식과 테이블 카탈로그를 Streamlit 화면에서 작성, 검증, 저장하는 등록 웹 |
 
 기본 코드 작성 이론은 아래 문서에 정리되어 있다.
 
@@ -36,6 +37,12 @@ Collection: manufacturing_domain_items
 ```text
 data_answer_flow / MongoDB Domain Item Payload Loader.domain_payload
 -> Main Flow Context Builder.domain_payload
+```
+
+Streamlit 화면으로 등록하려면 아래 앱을 실행한다.
+
+```powershell
+streamlit run C:\Users\qkekt\Desktop\langflow_local_manufacturing_project\langflow\registration_web\app.py
 ```
 
 Main Flow는 domain id를 입력하지 않는다. `manufacturing_domain_items` 컬렉션의 active item을 모두 읽어 `domain`, `domain_index`, `domain_prompt_context`로 합친다.

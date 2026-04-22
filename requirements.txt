@@ -4,3 +4,4 @@ python-dotenv>=1.0
 langchain-core>=0.3
 langchain-google-genai>=2.0
 langgraph>=0.2
+pymongo>=4.7

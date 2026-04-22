@@ -1,0 +1,71 @@
+생산 데이터셋을 등록하고 싶다.
+dataset_key는 production으로 사용한다.
+표시명은 생산 데이터이고, 질문 키워드는 생산량, 생산 실적, output, qty, 투입량, PKG INPUT, 마지막 투입, POP, MOBILE, AUTO, HBM, 3DS를 포함한다.
+필수 파라미터는 date이다.
+Oracle DB key는 MES이고 테이블명은 PROD_TABLE이다.
+tool_name은 get_production_data로 사용한다.
+
+SQL:
+SELECT
+    WORK_DT,
+    OPER_NAME,
+    OPER_DESC,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    LINE,
+    LOT_ID,
+    FAB,
+    DEVICE,
+    OWNER,
+    GRADE,
+    MCP_SALES_NO,
+    TSV_DIE_TYP,
+    SUM(QTY) AS production,
+    SUM(CASE WHEN OPER_DESC = 'INPUT' THEN QTY ELSE 0 END) AS input_qty
+FROM PROD_TABLE
+WHERE WORK_DT = :date
+  AND NVL(DELETE_FLAG, 'N') = 'N'
+  AND SITE_CODE = 'K1'
+GROUP BY
+    WORK_DT,
+    OPER_NAME,
+    OPER_DESC,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    LINE,
+    LOT_ID,
+    FAB,
+    DEVICE,
+    OWNER,
+    GRADE,
+    MCP_SALES_NO,
+    TSV_DIE_TYP
+
+컬럼:
+- WORK_DT: date, 작업일자
+- OPER_NAME: string, 공정명
+- OPER_DESC: string, 공정 설명이며 투입량 판단에 사용
+- MODE: string, 제품 mode
+- DEN: string, density
+- TECH: string, technology
+- MCP_NO: string, 제품 코드
+- PKG_TYPE1: string, 패키지 대분류
+- PKG_TYPE2: string, 패키지 보조 분류
+- LINE: string, 라인
+- LOT_ID: string, LOT 번호
+- FAB: string, 유연제품 조건 컬럼
+- DEVICE: string, 제품/자재 컬럼
+- OWNER: string, 유연제품 조건 컬럼
+- GRADE: string, 유연제품 조건 컬럼
+- MCP_SALES_NO: string, POP/MOBILE/AUTO 판단 컬럼
+- TSV_DIE_TYP: string, HBM/3DS/Hi 구분 컬럼
+- production: number, 생산량
+- input_qty: number, 투입량
