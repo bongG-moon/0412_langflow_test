@@ -2,7 +2,7 @@
 
 이 폴더는 새 도메인 정리 방식이다. 사용자는 하나의 입력창에 도메인 설명을 넣고, flow는 입력을 `gbn` 단위 item으로 분류한 뒤 MongoDB에 건바이건 저장한다.
 
-기존 `domain_authoring_flow`는 큰 `domain_patch` fragment를 저장하는 legacy 방식이다. 새 권장 방식은 이 폴더의 item 기반 저장 방식이다.
+현재 권장 방식은 이 폴더의 item 기반 저장 방식이다.
 
 ## 저장 Collection
 
@@ -40,11 +40,11 @@ Collection Name: manufacturing_domain_items
 03_mongodb_existing_domain_item_loader.py
 04_domain_item_prompt_context_builder.py
 05_domain_item_prompt_template.py
-built-in LLM node
-06_parse_domain_item_json.py
-07_normalize_domain_item.py
-08_domain_item_conflict_checker.py
-09_mongodb_domain_item_saver.py
+06_domain_item_llm_api_caller.py
+07_parse_domain_item_json.py
+08_normalize_domain_item.py
+09_domain_item_conflict_checker.py
+10_mongodb_domain_item_saver.py
 ```
 
 ## Wiring
@@ -57,8 +57,8 @@ built-in LLM node
 | `Domain Item Router.route_payload` | `Domain Item Prompt Context Builder.route_payload` | Yes |
 | `MongoDB Existing Domain Item Loader.existing_items` | `Domain Item Prompt Context Builder.existing_items` | Yes |
 | `Domain Item Prompt Context Builder.prompt_context` | `Domain Item Prompt Template.prompt_context` | Yes |
-| `Domain Item Prompt Template.prompt` | built-in LLM prompt/chat input | Yes |
-| built-in LLM output | `Parse Domain Item JSON.llm_output` | Yes |
+| `Domain Item Prompt Template.prompt_payload` | `Domain Item LLM API Caller.prompt` | Yes |
+| `Domain Item LLM API Caller.llm_result` | `Parse Domain Item JSON.llm_output` | Yes |
 | `Parse Domain Item JSON.domain_items_raw` | `Normalize Domain Item.domain_items_raw` | Yes |
 | `Domain Item Router.route_payload` | `Normalize Domain Item.route_payload` | Yes |
 | `Normalize Domain Item.normalized_domain_items` | `Domain Item Conflict Checker.normalized_domain_items` | Yes |
@@ -90,11 +90,21 @@ built-in LLM node
 }
 ```
 
-## Built-in LLM Node
+## Custom LLM Node
 
-새 flow에는 커스텀 LLM caller가 없다. `Domain Item Prompt Template.prompt`는 `Message` 타입 출력이므로 Langflow 기본 LLM 노드의 prompt/chat message 입력에 연결한다. LLM 결과는 `Parse Domain Item JSON.llm_output`으로 연결한다.
+이 flow는 Langflow 기본 LLM node 대신 커스텀 `Domain Item LLM API Caller`를 사용한다.
 
-`Domain Item Prompt Template.prompt_payload`는 `Data` 타입 보조 출력이다. built-in LLM 연결에는 보통 사용하지 않고, prompt 문자열 확인이나 커스텀 LLM 노드 연결이 필요할 때만 쓴다.
+연결은 아래와 같다.
+
+```text
+Domain Item Prompt Template.prompt_payload
+-> Domain Item LLM API Caller.prompt
+
+Domain Item LLM API Caller.llm_result
+-> Parse Domain Item JSON.llm_output
+```
+
+`Domain Item LLM API Caller`에는 노드별로 `llm_api_key`, `model_name`, `temperature`를 입력한다. 내부 호출은 `langchain_google_genai.ChatGoogleGenerativeAI`를 사용한다.
 
 LLM은 JSON만 반환해야 한다.
 
@@ -137,4 +147,4 @@ data_answer_flow / MongoDB Domain Item Payload Loader.domain_payload
   -> Query Mode Decider.domain_payload
 ```
 
-legacy fragment loader인 `MongoDB Domain Payload Loader` 대신 item loader를 쓰는 것이 새 권장 방식이다.
+Main Flow에서는 `MongoDB Domain Item Payload Loader`를 사용한다.

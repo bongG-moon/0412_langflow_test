@@ -1,4 +1,4 @@
-# Manufacturing Data Analysis Agent
+﻿# Manufacturing Data Analysis Agent
 
 This repository contains a manufacturing data-analysis agent whose canonical
 runtime is the `manufacturing_agent` package. The agent uses LangGraph for
@@ -77,8 +77,9 @@ and `extracted_params`, so multi-turn callers can preserve context safely.
 ## Useful Docs
 
 - `docs/00_START_HERE.md`
-- `docs/02_PROJECT_STRUCTURE.md`
-- `docs/03_BUILD_FLOW.md`
-- `docs/04_FUNCTION_GUIDE.md`
-- `docs/09_STREAMLIT_APP.md`
+- `docs/01_PROJECT_STRUCTURE.md`
+- `docs/02_BUILD_FLOW.md`
+- `docs/03_FUNCTION_GUIDE.md`
+- `docs/04_DOMAIN_AND_USAGE_GUIDE.md`
+- `docs/05_STREAMLIT_APP.md`
 - `.codex/harness/manufacturing-agent/HARNESS.md`

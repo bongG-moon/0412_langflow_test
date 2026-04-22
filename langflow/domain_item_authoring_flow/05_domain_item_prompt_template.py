@@ -195,4 +195,4 @@ class DomainItemPromptTemplate(Component):
 
     def build_prompt_payload(self) -> Data:
         prompt = self.build_prompt_text()
-        return _make_data({"prompt": prompt})
+        return _make_data({"prompt": prompt, "prompt_type": "domain_item_json"})

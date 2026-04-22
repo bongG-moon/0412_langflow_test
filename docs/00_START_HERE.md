@@ -1,4 +1,4 @@
-# Start Here
+﻿# Start Here
 
 This repository implements a manufacturing data-analysis chat agent.
 
@@ -9,8 +9,8 @@ calls the same agent entrypoint used by tests and other Python callers.
 ## What To Read First
 
 1. `README.md` for the shortest project overview.
-2. `PROJECT_STRUCTURE.md` for directory ownership.
-3. `docs/03_BUILD_FLOW.md` for the branch order.
+2. `docs/01_PROJECT_STRUCTURE.md` for directory ownership.
+3. `docs/02_BUILD_FLOW.md` for the branch order.
 4. `.codex/harness/manufacturing-agent/HARNESS.md` before changing behavior.
 
 ## Core State

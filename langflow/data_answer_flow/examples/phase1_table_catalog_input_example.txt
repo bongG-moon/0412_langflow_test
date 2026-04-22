@@ -1,0 +1,627 @@
+{
+  "catalog_id": "manufacturing_table_catalog",
+  "status": "active",
+  "datasets": {
+    "production": {
+      "display_name": "생산 데이터",
+      "description": "일자/공정/제품/라인/LOT 기준 생산 실적 raw data. 투입량, 마지막 투입, POP/MOBILE/AUTO/HBM/3DS/유연제품 조건 테스트에 사용한다.",
+      "keywords": [
+        "생산량",
+        "생산 실적",
+        "실적",
+        "output",
+        "qty",
+        "투입량",
+        "PKG INPUT",
+        "마지막 투입",
+        "장기 미투입",
+        "현재 투입 없음",
+        "POP",
+        "MOBILE",
+        "AUTO향",
+        "오토모티브향",
+        "오토향",
+        "HBM",
+        "3DS",
+        "2Hi",
+        "4Hi",
+        "8Hi",
+        "유연제품",
+        "유연생산 제품",
+        "유연작업제품"
+      ],
+      "question_examples": [
+        "오늘 A제품 생산량 알려줘",
+        "어제 공정별 생산량 TOP5 보여줘",
+        "오늘 POP 제품 투입량 알려줘",
+        "AUTO향 제품 중 마지막 투입일이 오래된 제품 알려줘",
+        "HBM 제품 생산량을 공정별로 보여줘"
+      ],
+      "tool_name": "get_production_data",
+      "source_type": "oracle",
+      "required_params": ["date"],
+      "db_key": "MES",
+      "table_name": "PROD_TABLE",
+      "sql_template": """
+SELECT
+    WORK_DT,
+    OPER_NAME,
+    OPER_DESC,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    LINE,
+    LOT_ID,
+    FAB,
+    DEVICE,
+    OWNER,
+    GRADE,
+    MCP_SALES_NO,
+    TSV_DIE_TYP,
+    SUM(QTY) AS production,
+    SUM(CASE WHEN OPER_DESC = 'INPUT' THEN QTY ELSE 0 END) AS input_qty
+FROM PROD_TABLE
+WHERE WORK_DT = :date
+  AND NVL(DELETE_FLAG, 'N') = 'N'
+  AND SITE_CODE = "K1"
+GROUP BY
+    WORK_DT,
+    OPER_NAME,
+    OPER_DESC,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    LINE,
+    LOT_ID,
+    FAB,
+    DEVICE,
+    OWNER,
+    GRADE,
+    MCP_SALES_NO,
+    TSV_DIE_TYP
+""",
+      "bind_params": {
+        "date": "date"
+      },
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "작업일"},
+        {"name": "OPER_NAME", "type": "string", "description": "공정명. 공정 그룹 매핑 기준 컬럼"},
+        {"name": "OPER_DESC", "type": "string", "description": "공정 설명. 투입량은 OPER_DESC='INPUT'인 생산 실적"},
+        {"name": "MODE", "type": "string", "description": "제품 mode. LP로 시작하는지 여부로 POP/MOBILE 조건에 사용"},
+        {"name": "DEN", "type": "string", "description": "density"},
+        {"name": "TECH", "type": "string", "description": "technology"},
+        {"name": "MCP_NO", "type": "string", "description": "제품 코드"},
+        {"name": "PKG_TYPE1", "type": "string", "description": "패키지 타입. POP/MOBILE/DS 조건에 사용"},
+        {"name": "PKG_TYPE2", "type": "string", "description": "보조 패키지 타입"},
+        {"name": "LINE", "type": "string", "description": "라인"},
+        {"name": "LOT_ID", "type": "string", "description": "LOT 번호"},
+        {"name": "FAB", "type": "string", "description": "유연제품 조건 구성 컬럼"},
+        {"name": "DEVICE", "type": "string", "description": "제품/자재 동의어 및 유연제품 조건 구성 컬럼"},
+        {"name": "OWNER", "type": "string", "description": "유연제품 조건 구성 컬럼"},
+        {"name": "GRADE", "type": "string", "description": "유연제품 조건 구성 컬럼"},
+        {"name": "MCP_SALES_NO", "type": "string", "description": "POP/MOBILE/AUTO향 조건 판단 컬럼"},
+        {"name": "TSV_DIE_TYP", "type": "string", "description": "2Hi/4Hi/8Hi/HBM/3DS 구분 컬럼"},
+        {"name": "production", "type": "number", "description": "생산량"},
+        {"name": "input_qty", "type": "number", "description": "OPER_DESC='INPUT' 기준 투입량"}
+      ]
+    },
+    "target": {
+      "display_name": "목표 데이터",
+      "description": "일자/제품별 생산 목표 raw data. 생산 달성률과 목표 미달 수량 계산에 사용한다.",
+      "keywords": ["목표량", "생산 목표", "target", "plan", "목표 미달", "목표 대비 생산"],
+      "question_examples": [
+        "오늘 A제품 목표량 알려줘",
+        "오늘 생산 달성률 계산해줘",
+        "목표 미달 수량이 큰 제품 TOP10 보여줘"
+      ],
+      "tool_name": "get_target_data",
+      "source_type": "oracle",
+      "required_params": ["date"],
+      "db_key": "PLAN",
+      "table_name": "TARGET_TABLE",
+      "sql_template": """
+SELECT
+    WORK_DT,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    TARGET_QTY AS target
+FROM TARGET_TABLE
+WHERE WORK_DT = :date
+  AND PLAN_STATUS = 'CONFIRMED'
+""",
+      "bind_params": {
+        "date": "date"
+      },
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "작업일"},
+        {"name": "MODE", "type": "string", "description": "제품 mode"},
+        {"name": "DEN", "type": "string", "description": "density"},
+        {"name": "TECH", "type": "string", "description": "technology"},
+        {"name": "MCP_NO", "type": "string", "description": "제품 코드"},
+        {"name": "PKG_TYPE1", "type": "string", "description": "패키지 타입"},
+        {"name": "PKG_TYPE2", "type": "string", "description": "보조 패키지 타입"},
+        {"name": "target", "type": "number", "description": "목표량"}
+      ]
+    },
+    "schedule": {
+      "display_name": "생산계획 데이터",
+      "description": "일별 투입계획과 스케쥴 데이터. 스케쥴, SCHD, 투입계획 질문에 사용한다.",
+      "keywords": ["스케쥴", "생산계획", "일별 투입계획", "SCHD", "투입계획", "schedule"],
+      "question_examples": [
+        "오늘 생산계획 알려줘",
+        "내일 투입계획에서 POP 제품만 보여줘",
+        "스케쥴 대비 생산 실적 알려줘"
+      ],
+      "tool_name": "get_schedule_data",
+      "source_type": "oracle",
+      "required_params": ["date"],
+      "db_key": "PLAN",
+      "table_name": "SCHD_TABLE",
+      "sql_template": """
+SELECT
+    WORK_DT,
+    SCHD_SEQ,
+    OPER_NAME,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    LINE,
+    PLAN_INPUT_QTY AS schedule_input_qty,
+    PLAN_OUTPUT_QTY AS schedule_output_qty
+FROM SCHD_TABLE
+WHERE WORK_DT = :date
+  AND SCHD_STATUS IN ('RELEASED', 'CONFIRMED')
+""",
+      "bind_params": {
+        "date": "date"
+      },
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "계획일"},
+        {"name": "SCHD_SEQ", "type": "string", "description": "스케쥴 순번"},
+        {"name": "OPER_NAME", "type": "string", "description": "계획 공정"},
+        {"name": "MODE", "type": "string", "description": "제품 mode"},
+        {"name": "DEN", "type": "string", "description": "density"},
+        {"name": "TECH", "type": "string", "description": "technology"},
+        {"name": "MCP_NO", "type": "string", "description": "제품 코드"},
+        {"name": "PKG_TYPE1", "type": "string", "description": "패키지 타입"},
+        {"name": "PKG_TYPE2", "type": "string", "description": "보조 패키지 타입"},
+        {"name": "LINE", "type": "string", "description": "라인"},
+        {"name": "schedule_input_qty", "type": "number", "description": "계획 투입량"},
+        {"name": "schedule_output_qty", "type": "number", "description": "계획 생산량"}
+      ]
+    },
+    "capa": {
+      "display_name": "CAPA 데이터",
+      "description": "제품/공정 기준 생산 가능 수량 데이터. 저조제품과 CAPA 대비 생산률 계산에 사용한다.",
+      "keywords": ["CAPA", "생산능력", "보유 CAPA", "가능 CAPA", "저조제품", "부족제품", "부진제품"],
+      "question_examples": [
+        "오늘 CAPA 대비 생산률 알려줘",
+        "저조제품 목록 보여줘",
+        "생산 보유 CAPA보다 실적이 낮은 제품 TOP10 알려줘"
+      ],
+      "tool_name": "get_capa_data",
+      "source_type": "oracle",
+      "required_params": ["date"],
+      "db_key": "PLAN",
+      "table_name": "CAPA_TABLE",
+      "sql_template": """
+SELECT
+    WORK_DT,
+    OPER_NAME,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    CAPA_QTY AS capa_qty
+FROM CAPA_TABLE
+WHERE WORK_DT = :date
+  AND CAPA_STATUS = 'ACTIVE'
+""",
+      "bind_params": {
+        "date": "date"
+      },
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "기준일"},
+        {"name": "OPER_NAME", "type": "string", "description": "공정명"},
+        {"name": "MODE", "type": "string", "description": "제품 mode"},
+        {"name": "DEN", "type": "string", "description": "density"},
+        {"name": "TECH", "type": "string", "description": "technology"},
+        {"name": "MCP_NO", "type": "string", "description": "제품 코드"},
+        {"name": "PKG_TYPE1", "type": "string", "description": "패키지 타입"},
+        {"name": "PKG_TYPE2", "type": "string", "description": "보조 패키지 타입"},
+        {"name": "capa_qty", "type": "number", "description": "생산 보유 CAPA"}
+      ]
+    },
+    "wip": {
+      "display_name": "재공 데이터",
+      "description": "공정에 머무는 LOT 또는 제품 수량 데이터.",
+      "keywords": ["재공", "WIP", "공정 재공", "재공량", "재공 회전일수"],
+      "question_examples": [
+        "오늘 공정별 재공량 알려줘",
+        "재공 회전일수 계산해줘",
+        "DP 공정 재공 TOP5 보여줘"
+      ],
+      "tool_name": "get_wip_status",
+      "source_type": "oracle",
+      "required_params": ["date"],
+      "db_key": "MES",
+      "table_name": "WIP_STATUS_TABLE",
+      "sql_template": """
+SELECT
+    WORK_DT,
+    OPER_NAME,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    LINE,
+    LOT_ID,
+    WIP_QTY AS wip_qty,
+    AVG_WAIT_MINUTES AS avg_wait_minutes
+FROM WIP_STATUS_TABLE
+WHERE WORK_DT = :date
+  AND LOT_STATUS = 'WIP'
+""",
+      "bind_params": {
+        "date": "date"
+      },
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "기준일"},
+        {"name": "OPER_NAME", "type": "string", "description": "현재 공정"},
+        {"name": "MODE", "type": "string", "description": "제품 mode"},
+        {"name": "DEN", "type": "string", "description": "density"},
+        {"name": "TECH", "type": "string", "description": "technology"},
+        {"name": "MCP_NO", "type": "string", "description": "제품 코드"},
+        {"name": "PKG_TYPE1", "type": "string", "description": "패키지 타입"},
+        {"name": "PKG_TYPE2", "type": "string", "description": "보조 패키지 타입"},
+        {"name": "LINE", "type": "string", "description": "라인"},
+        {"name": "LOT_ID", "type": "string", "description": "LOT 번호"},
+        {"name": "wip_qty", "type": "number", "description": "재공 수량"},
+        {"name": "avg_wait_minutes", "type": "number", "description": "평균 대기 시간"}
+      ]
+    },
+    "hold": {
+      "display_name": "Hold 데이터",
+      "description": "HOLD 상태 LOT과 hold 사유 데이터.",
+      "keywords": ["hold", "홀드", "보류", "정지 LOT", "hold 사유"],
+      "question_examples": [
+        "오늘 Hold LOT 알려줘",
+        "공정별 hold 사유 TOP5 보여줘",
+        "LOT-123 hold 이력 알려줘"
+      ],
+      "tool_name": "get_hold_lot_data",
+      "source_type": "oracle",
+      "required_params": ["date"],
+      "db_key": "MES",
+      "table_name": "HOLD_LOT_TABLE",
+      "sql_template": """
+SELECT
+    WORK_DT,
+    LOT_ID,
+    OPER_NAME,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    HOLD_REASON,
+    HOLD_QTY AS hold_qty,
+    HOLD_HOURS AS hold_hours
+FROM HOLD_LOT_TABLE
+WHERE WORK_DT = :date
+  AND HOLD_STATUS = 'HOLD'
+""",
+      "bind_params": {
+        "date": "date"
+      },
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "기준일"},
+        {"name": "LOT_ID", "type": "string", "description": "LOT 번호"},
+        {"name": "OPER_NAME", "type": "string", "description": "Hold 공정"},
+        {"name": "MODE", "type": "string", "description": "제품 mode"},
+        {"name": "DEN", "type": "string", "description": "density"},
+        {"name": "TECH", "type": "string", "description": "technology"},
+        {"name": "MCP_NO", "type": "string", "description": "제품 코드"},
+        {"name": "PKG_TYPE1", "type": "string", "description": "패키지 타입"},
+        {"name": "PKG_TYPE2", "type": "string", "description": "보조 패키지 타입"},
+        {"name": "HOLD_REASON", "type": "string", "description": "Hold 사유"},
+        {"name": "hold_qty", "type": "number", "description": "Hold 수량"},
+        {"name": "hold_hours", "type": "number", "description": "Hold 시간"}
+      ]
+    },
+    "scrap": {
+      "display_name": "Scrap 데이터",
+      "description": "폐기 또는 불량 폐기 수량 데이터. 스크랩률 계산에 사용한다.",
+      "keywords": ["scrap", "스크랩", "폐기", "폐기량", "스크랩률"],
+      "question_examples": [
+        "오늘 스크랩률 알려줘",
+        "폐기량 많은 제품 TOP10 알려줘",
+        "공정별 scrap 수량 보여줘"
+      ],
+      "tool_name": "get_scrap_data",
+      "source_type": "oracle",
+      "required_params": ["date"],
+      "db_key": "MES",
+      "table_name": "SCRAP_TABLE",
+      "sql_template": """
+SELECT
+    WORK_DT,
+    OPER_NAME,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    SCRAP_REASON,
+    INPUT_QTY AS input_qty,
+    SCRAP_QTY AS scrap_qty
+FROM SCRAP_TABLE
+WHERE WORK_DT = :date
+  AND SCRAP_QTY > 0
+""",
+      "bind_params": {
+        "date": "date"
+      },
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "작업일"},
+        {"name": "OPER_NAME", "type": "string", "description": "공정명"},
+        {"name": "MODE", "type": "string", "description": "제품 mode"},
+        {"name": "DEN", "type": "string", "description": "density"},
+        {"name": "TECH", "type": "string", "description": "technology"},
+        {"name": "MCP_NO", "type": "string", "description": "제품 코드"},
+        {"name": "PKG_TYPE1", "type": "string", "description": "패키지 타입"},
+        {"name": "PKG_TYPE2", "type": "string", "description": "보조 패키지 타입"},
+        {"name": "SCRAP_REASON", "type": "string", "description": "Scrap 사유"},
+        {"name": "input_qty", "type": "number", "description": "투입 수량"},
+        {"name": "scrap_qty", "type": "number", "description": "Scrap 수량"}
+      ]
+    },
+    "defect": {
+      "display_name": "검사/불량 데이터",
+      "description": "검사 수량, 불량 수량, 불량 유형 데이터. 불량률 계산에 사용한다.",
+      "keywords": ["검사", "불량", "defect", "inspection", "불량률", "검사 수량", "불량 수량"],
+      "question_examples": [
+        "오늘 불량률 알려줘",
+        "검사 데이터에서 불량 유형 TOP5 보여줘",
+        "공정별 defect rate 알려줘"
+      ],
+      "tool_name": "get_defect_rate",
+      "source_type": "oracle",
+      "required_params": ["date"],
+      "db_key": "QMS",
+      "table_name": "DEFECT_TABLE",
+      "sql_template": """
+SELECT
+    WORK_DT,
+    OPER_NAME,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    DEFECT_CODE,
+    DEFECT_NAME,
+    INSPECTION_QTY AS inspection_qty,
+    DEFECT_QTY AS defect_qty
+FROM DEFECT_TABLE
+WHERE WORK_DT = :date
+  AND INSPECTION_QTY > 0
+""",
+      "bind_params": {
+        "date": "date"
+      },
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "검사일"},
+        {"name": "OPER_NAME", "type": "string", "description": "검사 공정"},
+        {"name": "MODE", "type": "string", "description": "제품 mode"},
+        {"name": "DEN", "type": "string", "description": "density"},
+        {"name": "TECH", "type": "string", "description": "technology"},
+        {"name": "MCP_NO", "type": "string", "description": "제품 코드"},
+        {"name": "PKG_TYPE1", "type": "string", "description": "패키지 타입"},
+        {"name": "PKG_TYPE2", "type": "string", "description": "보조 패키지 타입"},
+        {"name": "DEFECT_CODE", "type": "string", "description": "불량 코드"},
+        {"name": "DEFECT_NAME", "type": "string", "description": "불량명"},
+        {"name": "inspection_qty", "type": "number", "description": "검사 수량"},
+        {"name": "defect_qty", "type": "number", "description": "불량 수량"}
+      ]
+    },
+    "yield": {
+      "display_name": "수율 데이터",
+      "description": "투입 수량과 양품 수량 기준 수율 데이터.",
+      "keywords": ["수율", "yield", "양품", "양품 수량", "투입 수량"],
+      "question_examples": [
+        "오늘 수율 알려줘",
+        "공정별 수율 TOP5 보여줘",
+        "수율 낮은 제품 알려줘"
+      ],
+      "tool_name": "get_yield_data",
+      "source_type": "oracle",
+      "required_params": ["date"],
+      "db_key": "QMS",
+      "table_name": "YIELD_TABLE",
+      "sql_template": """
+SELECT
+    WORK_DT,
+    OPER_NAME,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    INPUT_QTY AS input_qty,
+    PASS_QTY AS pass_qty
+FROM YIELD_TABLE
+WHERE WORK_DT = :date
+  AND INPUT_QTY > 0
+""",
+      "bind_params": {
+        "date": "date"
+      },
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "작업일"},
+        {"name": "OPER_NAME", "type": "string", "description": "공정명"},
+        {"name": "MODE", "type": "string", "description": "제품 mode"},
+        {"name": "DEN", "type": "string", "description": "density"},
+        {"name": "TECH", "type": "string", "description": "technology"},
+        {"name": "MCP_NO", "type": "string", "description": "제품 코드"},
+        {"name": "PKG_TYPE1", "type": "string", "description": "패키지 타입"},
+        {"name": "PKG_TYPE2", "type": "string", "description": "보조 패키지 타입"},
+        {"name": "input_qty", "type": "number", "description": "투입 수량"},
+        {"name": "pass_qty", "type": "number", "description": "양품 수량"}
+      ]
+    },
+    "equipment": {
+      "display_name": "설비 상태 데이터",
+      "description": "설비 가동, 비가동, 다운 상태 데이터.",
+      "keywords": ["설비상태", "설비 가동", "장비상태", "equipment status", "비가동", "다운"],
+      "question_examples": [
+        "오늘 설비 가동률 알려줘",
+        "다운 설비 목록 보여줘",
+        "공정별 설비 비가동 시간 알려줘"
+      ],
+      "tool_name": "get_equipment_status",
+      "source_type": "oracle",
+      "required_params": ["date"],
+      "db_key": "MES",
+      "table_name": "EQUIPMENT_STATUS_TABLE",
+      "sql_template": """
+SELECT
+    WORK_DT,
+    OPER_NAME,
+    EQUIPMENT_ID,
+    EQUIPMENT_STATUS,
+    LINE,
+    PLANNED_HOURS AS planned_hours,
+    ACTUAL_HOURS AS actual_hours,
+    DOWN_HOURS AS down_hours
+FROM EQUIPMENT_STATUS_TABLE
+WHERE WORK_DT = :date
+""",
+      "bind_params": {
+        "date": "date"
+      },
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "기준일"},
+        {"name": "OPER_NAME", "type": "string", "description": "공정명"},
+        {"name": "EQUIPMENT_ID", "type": "string", "description": "설비 ID"},
+        {"name": "EQUIPMENT_STATUS", "type": "string", "description": "설비 상태"},
+        {"name": "LINE", "type": "string", "description": "라인"},
+        {"name": "planned_hours", "type": "number", "description": "계획 시간"},
+        {"name": "actual_hours", "type": "number", "description": "실제 가동 시간"},
+        {"name": "down_hours", "type": "number", "description": "비가동 시간"}
+      ]
+    },
+    "recipe": {
+      "display_name": "Recipe 조건 데이터",
+      "description": "공정별 recipe 조건, 관리 상하한 데이터.",
+      "keywords": ["recipe", "레시피", "조건", "관리한계", "상한", "하한"],
+      "question_examples": [
+        "오늘 DA 공정 recipe 조건 보여줘",
+        "관리한계 이탈 조건 알려줘",
+        "공정별 레시피 설정값 조회해줘"
+      ],
+      "tool_name": "get_recipe_condition_data",
+      "source_type": "oracle",
+      "required_params": ["date"],
+      "db_key": "MES",
+      "table_name": "RECIPE_CONDITION_TABLE",
+      "sql_template": """
+SELECT
+    WORK_DT,
+    OPER_NAME,
+    RECIPE_ID,
+    CONDITION_NAME,
+    CONDITION_VALUE,
+    LOWER_LIMIT,
+    UPPER_LIMIT
+FROM RECIPE_CONDITION_TABLE
+WHERE WORK_DT = :date
+""",
+      "bind_params": {
+        "date": "date"
+      },
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "기준일"},
+        {"name": "OPER_NAME", "type": "string", "description": "공정명"},
+        {"name": "RECIPE_ID", "type": "string", "description": "Recipe ID"},
+        {"name": "CONDITION_NAME", "type": "string", "description": "조건명"},
+        {"name": "CONDITION_VALUE", "type": "number", "description": "조건값"},
+        {"name": "LOWER_LIMIT", "type": "number", "description": "하한"},
+        {"name": "UPPER_LIMIT", "type": "number", "description": "상한"}
+      ]
+    },
+    "lot_trace": {
+      "display_name": "LOT 추적 데이터",
+      "description": "LOT_ID 기준 공정 이동 이력과 현재 위치 데이터.",
+      "keywords": ["LOT 추적", "lot 이력", "lot trace", "이동 이력", "현재 위치"],
+      "question_examples": [
+        "LOT-123 공정 이동 이력 보여줘",
+        "이 LOT은 지금 어디 공정에 있어?",
+        "LOT-123의 Hold 이력과 이동 이력을 같이 보여줘"
+      ],
+      "tool_name": "get_lot_trace_data",
+      "source_type": "oracle",
+      "required_params": ["lot_id"],
+      "db_key": "MES",
+      "table_name": "LOT_TRACE_TABLE",
+      "sql_template": """
+SELECT
+    WORK_DT,
+    LOT_ID,
+    OPER_NAME,
+    MOVE_IN_TIME,
+    MOVE_OUT_TIME,
+    MODE,
+    DEN,
+    TECH,
+    MCP_NO,
+    PKG_TYPE1,
+    PKG_TYPE2,
+    LINE,
+    LOT_STATUS
+FROM LOT_TRACE_TABLE
+WHERE LOT_ID = :lot_id
+  AND LOT_STATUS <> 'CANCEL'
+""",
+      "bind_params": {
+        "lot_id": "lot_id"
+      },
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "작업일"},
+        {"name": "LOT_ID", "type": "string", "description": "LOT 번호"},
+        {"name": "OPER_NAME", "type": "string", "description": "공정명"},
+        {"name": "MOVE_IN_TIME", "type": "datetime", "description": "공정 투입 시각"},
+        {"name": "MOVE_OUT_TIME", "type": "datetime", "description": "공정 출고 시각"},
+        {"name": "MODE", "type": "string", "description": "제품 mode"},
+        {"name": "DEN", "type": "string", "description": "density"},
+        {"name": "TECH", "type": "string", "description": "technology"},
+        {"name": "MCP_NO", "type": "string", "description": "제품 코드"},
+        {"name": "PKG_TYPE1", "type": "string", "description": "패키지 타입"},
+        {"name": "PKG_TYPE2", "type": "string", "description": "보조 패키지 타입"},
+        {"name": "LINE", "type": "string", "description": "라인"},
+        {"name": "LOT_STATUS", "type": "string", "description": "LOT 상태"}
+      ]
+    }
+  }
+}

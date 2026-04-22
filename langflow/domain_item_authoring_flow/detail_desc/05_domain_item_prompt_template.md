@@ -7,12 +7,13 @@
 출력:
 
 ```text
-prompt         -> Message 타입. built-in LLM prompt/chat input에 연결
-prompt_payload -> Data 타입. prompt 문자열 확인 또는 커스텀 LLM 노드 연결용
+prompt         -> Message 타입. prompt 미리보기 또는 호환용
+prompt_payload -> Data 타입. Domain Item LLM API Caller에 연결
 ```
 
 다음 연결:
 
 ```text
-Domain Item Prompt Template.prompt -> built-in LLM prompt/chat input
+Domain Item Prompt Template.prompt_payload
+-> Domain Item LLM API Caller.prompt
 ```
