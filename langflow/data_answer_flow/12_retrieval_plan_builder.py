@@ -210,6 +210,11 @@ def _dataset_config(dataset_key: str, domain: Dict[str, Any], table_catalog: Dic
     return config
 
 
+def _source_type_for_dataset(dataset: Dict[str, Any]) -> str:
+    source = dataset.get("source") if isinstance(dataset.get("source"), dict) else {}
+    return str(dataset.get("source_type") or source.get("type") or "auto").strip() or "auto"
+
+
 def _required_params_for_dataset(dataset_key: str, dataset: Dict[str, Any], decision: Dict[str, Any], intent: Dict[str, Any]) -> Dict[str, Any]:
     requested = intent.get("required_params") if isinstance(intent.get("required_params"), dict) else {}
     effective_by_dataset = (
@@ -369,6 +374,7 @@ def build_retrieval_plan(
                 "dataset_key": dataset_key,
                 "dataset_label": dataset.get("display_name", dataset_key),
                 "tool_name": _tool_name_for_dataset(dataset_key, dataset),
+                "source_type": _source_type_for_dataset(dataset),
                 "params": params,
                 "post_filters": filters,
                 "filter_expressions": filter_expressions,
@@ -450,9 +456,8 @@ class RetrievalPlanBuilder(Component):
         DataInput(
             name="table_catalog_payload",
             display_name="Table Catalog Payload",
-            info="Legacy direct table catalog input. Prefer propagated Main Context.",
+            info="Output from Table Catalog Loader. Connect directly; table catalog is not propagated through Main Context.",
             input_types=["Data", "JSON"],
-            advanced=True,
         ),
     ]
 

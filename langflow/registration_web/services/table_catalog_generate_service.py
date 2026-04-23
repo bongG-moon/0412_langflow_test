@@ -64,10 +64,9 @@ def build_table_catalog_prompt(raw_text: str, existing_table_items: list[Dict[st
                 "tool_name": "get_dataset_key_data",
                 "source_type": "oracle",
                 "required_params": ["date"],
+                "format_params": ["date"],
                 "db_key": "MES|PLAN|...",
                 "table_name": "ORACLE_TABLE_NAME",
-                "sql_template": "SELECT ... WHERE WORK_DT = :date",
-                "bind_params": {"date": "date"},
                 "columns": [
                     {"name": "WORK_DT", "type": "date", "description": "컬럼 설명"},
                     {"name": "production", "type": "number", "description": "생산량"},
@@ -79,12 +78,13 @@ def build_table_catalog_prompt(raw_text: str, existing_table_items: list[Dict[st
 반드시 JSON object만 반환하세요. markdown fence는 쓰지 마세요.
 
 목표:
-- 사용자가 붙여넣은 SQL, DDL, 컬럼 설명, 자연어 설명을 Main Flow Table Catalog 형식으로 변환합니다.
-- sql_template은 줄바꿈이 보존된 하나의 문자열로 작성합니다.
-- SQL bind 변수는 Oracle 형식의 :date, :product 같은 이름을 사용합니다.
+- 사용자가 붙여넣은 SQL, DDL, 컬럼 설명, 자연어 설명을 Main Flow Table Catalog 메타데이터 형식으로 변환합니다.
+- SQL은 Table Catalog에 저장하지 않습니다. SQL은 각 retriever tool 함수 내부에서 관리됩니다.
+- 사용자가 SQL을 붙여넣어도 table_name, 컬럼, required_params, keywords를 추론하는 참고 자료로만 사용하세요.
 - required_params는 사용자 질문에서 반드시 추출되어야 하는 파라미터입니다.
-- bind_params는 SQL bind 변수명을 Agent 파라미터명으로 매핑합니다.
+- format_params는 retriever tool 함수의 {{0}}, {{1}} format slot에 들어갈 Agent 파라미터 순서입니다.
 - 질문 의도 매핑에 필요한 keywords와 question_examples를 충분히 작성합니다.
+- sql_template, query_template, sql, sql_text, oracle_sql, bind_params는 반환하지 마세요.
 
 이미 등록된 테이블 정의 요약:
 {json.dumps(existing_summary, ensure_ascii=False, indent=2)}

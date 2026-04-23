@@ -72,6 +72,7 @@ Data = _load_attr(["lfx.schema.data", "lfx.schema", "langflow.schema"], "Data", 
 
 VALID_COLUMN_TYPES = {"string", "number", "date", "datetime", "boolean"}
 SQL_TEXT_KEYS = ("sql_template", "query_template", "sql", "sql_text", "query", "oracle_sql")
+SQL_LINE_KEYS = ("sql_template_lines", "query_template_lines", "sql_lines")
 TRIPLE_DOUBLE_SQL_BLOCK_RE = re.compile(
     r'(?P<prefix>"(?:sql_template|query_template|sql|sql_text|query|oracle_sql)"\s*:\s*)"""(?P<body>.*?)"""',
     re.DOTALL,
@@ -79,6 +80,10 @@ TRIPLE_DOUBLE_SQL_BLOCK_RE = re.compile(
 TRIPLE_SINGLE_SQL_BLOCK_RE = re.compile(
     r"(?P<prefix>\"(?:sql_template|query_template|sql|sql_text|query|oracle_sql)\"\s*:\s*)'''(?P<body>.*?)'''",
     re.DOTALL,
+)
+RAW_SQL_BLOCK_RE = re.compile(
+    r'(?P<prefix>"(?:sql_template|query_template|sql|sql_text|query|oracle_sql)"\s*:\s*)(?P<body>\s*(?:WITH|SELECT)\b.*?)(?=(?:,\s*"[A-Za-z0-9_]+"\s*:)|(?:\s*}\s*[},]))',
+    re.DOTALL | re.IGNORECASE,
 )
 
 
@@ -139,6 +144,7 @@ def _replace_sql_block(match: re.Match[str]) -> str:
 def _normalize_relaxed_table_catalog_text(text: str) -> str:
     text = TRIPLE_DOUBLE_SQL_BLOCK_RE.sub(_replace_sql_block, text)
     text = TRIPLE_SINGLE_SQL_BLOCK_RE.sub(_replace_sql_block, text)
+    text = RAW_SQL_BLOCK_RE.sub(_replace_sql_block, text)
     return text
 
 
@@ -157,7 +163,7 @@ def _string_list(value: Any) -> list[str]:
 
 
 def _normalize_sql(dataset: Dict[str, Any]) -> str:
-    for key in ("sql_template_lines", "query_template_lines", "sql_lines"):
+    for key in SQL_LINE_KEYS:
         lines = dataset.get(key)
         if isinstance(lines, list):
             return "\n".join(str(line).rstrip() for line in lines if str(line).strip()).strip()
@@ -174,6 +180,16 @@ def _normalize_sql(dataset: Dict[str, Any]) -> str:
     if isinstance(sql.get("template"), str):
         return sql["template"].strip()
     return ""
+
+
+def _drop_sql_fields(dataset: Dict[str, Any]) -> None:
+    for key in (*SQL_TEXT_KEYS, *SQL_LINE_KEYS):
+        dataset.pop(key, None)
+    for nested_key in ("source", "oracle"):
+        nested = dataset.get(nested_key)
+        if isinstance(nested, dict):
+            for key in (*SQL_TEXT_KEYS, *SQL_LINE_KEYS):
+                nested.pop(key, None)
 
 
 def _normalize_columns(value: Any, dataset_key: str, errors: list[str]) -> list[Dict[str, Any]]:
@@ -206,9 +222,17 @@ def _normalize_dataset(dataset_key: str, value: Any, errors: list[str]) -> Dict[
     dataset["required_params"] = _string_list(dataset.get("required_params"))
     dataset["db_key"] = str(dataset.get("db_key") or (dataset.get("oracle", {}) if isinstance(dataset.get("oracle"), dict) else {}).get("db_key") or "").strip()
     dataset["table_name"] = str(dataset.get("table_name") or dataset.get("table") or "").strip()
-    dataset["sql_template"] = _normalize_sql(dataset)
+    if isinstance(dataset.get("format_params"), (list, tuple)):
+        dataset["format_params"] = _string_list(dataset.get("format_params"))
+    elif isinstance(dataset.get("format_params"), dict):
+        dataset["format_params"] = dict(dataset["format_params"])
+    elif isinstance(dataset.get("bind_params"), dict):
+        dataset["format_params"] = [str(value or key).strip() for key, value in dataset["bind_params"].items() if str(value or key).strip()]
+    else:
+        dataset["format_params"] = []
     dataset["bind_params"] = dataset.get("bind_params") if isinstance(dataset.get("bind_params"), dict) else {}
     dataset["columns"] = _normalize_columns(dataset.get("columns"), dataset_key, errors)
+    _drop_sql_fields(dataset)
     return dataset
 
 
@@ -255,7 +279,7 @@ def load_table_catalog(table_catalog_json_payload: Any) -> Dict[str, Any]:
             "table_catalog_prompt_context": {"datasets": {}},
             "table_catalog_errors": [
                 f"Table catalog JSON parse failed: {exc}",
-                'For copy-paste SQL, use: "sql_template": """SELECT ..."""',
+                "Table catalog SQL fields are no longer required; keep SQL in retriever tool functions.",
             ],
         }
     if not isinstance(parsed, dict):
@@ -298,7 +322,7 @@ class TableCatalogLoader(Component):
         DataInput(
             name="table_catalog_json_payload",
             display_name="Table Catalog JSON Payload",
-            info='Output from Table Catalog JSON Input. Copy-paste SQL blocks can use "sql_template": """...""".',
+            info="Output from Table Catalog JSON Input. SQL fields are ignored; keep SQL in retriever tool functions.",
             input_types=["Data", "JSON", "Text"],
         ),
     ]

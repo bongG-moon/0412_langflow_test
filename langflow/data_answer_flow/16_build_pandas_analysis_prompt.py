@@ -101,6 +101,9 @@ Join and merge notes:
 Available dataframe profile:
 {data_profile}
 
+Allowed dataframe columns:
+{allowed_columns}
+
 Sample rows:
 {sample_rows}
 
@@ -109,7 +112,8 @@ Rules:
 - Always assign the final pandas DataFrame to `result`.
 - Do not import anything.
 - Do not use files, network, shell, eval, exec, open, OS APIs, plotting, or database access.
-- Use only existing columns from the dataframe profile.
+- Use only existing columns from the allowed dataframe columns list.
+- Treat allowed dataframe columns as authoritative. Ignore domain/catalog columns that are not in that list.
 - Apply the user's filters, grouping, summary, sorting, top_n, and metric calculation intent.
 - If the user asks for a metric formula listed in domain metrics, use that formula as a strong hint.
 - If a requested column is missing, return an empty code string and explain the missing column in warnings.
@@ -208,7 +212,19 @@ def _analysis_context(value: Any) -> Dict[str, Any]:
     return context if isinstance(context, dict) else payload
 
 
-def _relevant_domain_slice(domain: Dict[str, Any], context: Dict[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any]]:
+def _column_names_from_defs(value: Any) -> list[str]:
+    columns: list[str] = []
+    for column in _as_list(value):
+        if isinstance(column, dict):
+            name = str(column.get("name") or "").strip()
+        else:
+            name = str(column or "").strip()
+        if name:
+            columns.append(name)
+    return columns
+
+
+def _relevant_domain_slice(domain: Dict[str, Any], context: Dict[str, Any], available_columns: list[str]) -> tuple[Dict[str, Any], Dict[str, Any]]:
     intent = context.get("intent") if isinstance(context.get("intent"), dict) else {}
     plan = context.get("retrieval_plan") if isinstance(context.get("retrieval_plan"), dict) else {}
     dataset_keys: list[str] = []
@@ -229,16 +245,20 @@ def _relevant_domain_slice(domain: Dict[str, Any], context: Dict[str, Any]) -> t
     dataset_keys = [key for key in dataset_keys if not (key in seen or seen.add(key))]
 
     all_datasets = domain.get("datasets") if isinstance(domain.get("datasets"), dict) else {}
+    available_column_set = set(available_columns)
     datasets: Dict[str, Any] = {}
     for key in dataset_keys:
         dataset = all_datasets.get(key)
         if not isinstance(dataset, dict):
             continue
+        dataset_columns = _column_names_from_defs(dataset.get("columns"))
+        if available_column_set:
+            dataset_columns = [column for column in dataset_columns if column in available_column_set]
         datasets[key] = {
             "display_name": dataset.get("display_name", key),
             "description": dataset.get("description", ""),
             "required_params": dataset.get("required_params", []),
-            "columns": dataset.get("columns", []),
+            "columns": dataset_columns,
         }
 
     metrics: Dict[str, Any] = {}
@@ -290,11 +310,11 @@ def build_pandas_analysis_prompt(
     )
     table = context.get("analysis_table") if isinstance(context.get("analysis_table"), dict) else {}
     rows = table.get("data") if isinstance(table.get("data"), list) else []
-    columns = table.get("columns") if isinstance(table.get("columns"), list) else (list(rows[0].keys()) if rows and isinstance(rows[0], dict) else [])
+    columns = [str(column) for column in (table.get("columns") if isinstance(table.get("columns"), list) else (list(rows[0].keys()) if rows and isinstance(rows[0], dict) else []))]
     if domain_payload is None and main_context:
         domain_payload = main_context.get("domain_payload") or {"domain": main_context.get("domain", {})}
     domain = _get_domain(domain_payload)
-    relevant_metrics, relevant_datasets = _relevant_domain_slice(domain, context)
+    relevant_metrics, relevant_datasets = _relevant_domain_slice(domain, context, columns)
     template = str(template_value or DEFAULT_TEMPLATE).strip()
     template_vars = {
         "user_question": context.get("user_question", ""),
@@ -303,7 +323,8 @@ def build_pandas_analysis_prompt(
         "metrics": _compact_json(relevant_metrics, limit=5000),
         "datasets": _compact_json(relevant_datasets, limit=5000),
         "merge_notes": _compact_json(context.get("merge_notes", []), limit=2000),
-        "data_profile": _compact_json(_profile_rows(rows, [str(column) for column in columns]), limit=8000),
+        "data_profile": _compact_json(_profile_rows(rows, columns), limit=8000),
+        "allowed_columns": _compact_json(columns, limit=4000),
         "sample_rows": _compact_json(rows[:8], limit=8000),
     }
     try:
@@ -324,7 +345,7 @@ class BuildPandasAnalysisPrompt(Component):
             display_name="Template",
             value=DEFAULT_TEMPLATE,
             required=True,
-            info="Use {user_question}, {intent}, {retrieval_plan}, {metrics}, {datasets}, {merge_notes}, {data_profile}, and {sample_rows}.",
+            info="Use {user_question}, {intent}, {retrieval_plan}, {metrics}, {datasets}, {merge_notes}, {data_profile}, {allowed_columns}, and {sample_rows}.",
         ),
         DataInput(name="analysis_context", display_name="Analysis Context", info="Output from Analysis Base Builder.", input_types=["Data", "JSON"]),
         DataInput(name="main_context", display_name="Main Context", info="Optional direct output from Main Flow Context Builder. Usually propagated by Analysis Context.", input_types=["Data", "JSON"], advanced=True),

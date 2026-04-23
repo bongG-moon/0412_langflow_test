@@ -115,9 +115,6 @@ Current data summary:
 
 Available manufacturing domain:
 {domain_summary}
-
-Available table catalog summary:
-{table_catalog_summary}
 """
 
 
@@ -190,7 +187,6 @@ def _domain_summary(domain: Dict[str, Any], domain_index: Dict[str, Any]) -> Dic
             "description": dataset.get("description", ""),
             "keywords": dataset.get("keywords", []),
             "required_params": dataset.get("required_params", []),
-            "columns": dataset.get("columns", []),
         }
 
     metrics = {}
@@ -251,12 +247,6 @@ def build_intent_prompt(
         domain_prompt_context = main_context["domain_prompt_context"]
     elif isinstance(domain_full_payload.get("domain_prompt_context"), dict):
         domain_prompt_context = domain_full_payload["domain_prompt_context"]
-    table_catalog_prompt_context = (
-        main_context.get("table_catalog_prompt_context")
-        if isinstance(main_context.get("table_catalog_prompt_context"), dict)
-        else {}
-    )
-
     context = agent_state.get("context", {}) if isinstance(agent_state, dict) else {}
     chat_history = agent_state.get("chat_history", []) if isinstance(agent_state, dict) else []
     recent_history = chat_history[-6:] if isinstance(chat_history, list) else []
@@ -284,8 +274,8 @@ def build_intent_prompt(
         "recent_history": _compact_dict(recent_history),
         "context": _compact_dict(context),
         "current_data": _compact_dict(current_data),
-        "domain_summary": _compact_dict(domain_prompt_context or _domain_summary(domain, domain_index), limit=9000),
-        "table_catalog_summary": _compact_dict(table_catalog_prompt_context, limit=7000),
+        "domain_summary": _compact_dict(domain_prompt_context or _domain_summary(domain, domain_index), limit=7000),
+        "table_catalog_summary": "{}",
     }
     try:
         return template.format(**values)
@@ -305,7 +295,7 @@ class BuildIntentPrompt(Component):
             display_name="Template",
             value=DEFAULT_TEMPLATE,
             required=True,
-            info="Use {schema}, {user_question}, {recent_history}, {context}, {current_data}, {domain_summary}, and {table_catalog_summary}.",
+            info="Use {schema}, {user_question}, {recent_history}, {context}, {current_data}, and {domain_summary}.",
         ),
         DataInput(
             name="main_context",

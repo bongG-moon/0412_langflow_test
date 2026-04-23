@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
-import re
 from copy import deepcopy
 from typing import Any, Dict
 
 from .config import VALID_COLUMN_TYPES
 
 
-SQL_BIND_RE = re.compile(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)")
+SQL_TEXT_KEYS = ("sql_template", "query_template", "sql", "sql_text", "query", "oracle_sql")
+SQL_LINE_KEYS = ("sql_template_lines", "query_template_lines", "sql_lines")
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -30,23 +30,34 @@ def _string_list(value: Any) -> list[str]:
     return result
 
 
-def _normalize_sql(dataset: Dict[str, Any]) -> str:
-    for key in ("sql_template_lines", "query_template_lines", "sql_lines"):
-        lines = dataset.get(key)
-        if isinstance(lines, list):
-            return "\n".join(str(line).rstrip() for line in lines if str(line).strip()).strip()
-    for key in ("sql_template", "query_template", "sql", "sql_text", "query", "oracle_sql"):
-        value = dataset.get(key)
-        if isinstance(value, list):
-            return "\n".join(str(line).rstrip() for line in value if str(line).strip()).strip()
-        if isinstance(value, str):
-            return value.strip()
-    sql = dataset.get("sql") if isinstance(dataset.get("sql"), dict) else {}
-    if isinstance(sql.get("lines"), list):
-        return "\n".join(str(line).rstrip() for line in sql["lines"] if str(line).strip()).strip()
-    if isinstance(sql.get("template"), str):
-        return sql["template"].strip()
-    return ""
+def _has_sql_fields(dataset: Dict[str, Any]) -> bool:
+    if any(key in dataset for key in (*SQL_TEXT_KEYS, *SQL_LINE_KEYS)):
+        return True
+    for nested_key in ("source", "oracle"):
+        nested = dataset.get(nested_key)
+        if isinstance(nested, dict) and any(key in nested for key in (*SQL_TEXT_KEYS, *SQL_LINE_KEYS)):
+            return True
+    return False
+
+
+def _normalize_format_params(dataset: Dict[str, Any], required_params: list[str], issues: list[Dict[str, Any]], dataset_key: str) -> list[str]:
+    if isinstance(dataset.get("format_params"), dict):
+        items = list(dataset["format_params"].items())
+        if all(str(key).strip().isdigit() for key, _ in items):
+            items = sorted(items, key=lambda item: int(str(item[0]).strip()))
+        return _string_list([value or key for key, value in items])
+    if isinstance(dataset.get("format_params"), (list, tuple)):
+        return _string_list(dataset.get("format_params"))
+    if isinstance(dataset.get("bind_params"), dict):
+        issues.append(
+            {
+                "severity": "warning",
+                "type": "legacy_bind_params_ignored",
+                "message": f"{dataset_key}: bind_params is legacy metadata; converted to format_params only.",
+            }
+        )
+        return _string_list([value or key for key, value in dataset["bind_params"].items()])
+    return list(required_params)
 
 
 def _normalize_columns(value: Any, dataset_key: str, issues: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
@@ -80,6 +91,15 @@ def _normalize_dataset(dataset_key: str, value: Any, issues: list[Dict[str, Any]
     dataset = deepcopy(value)
     source = dataset.get("source") if isinstance(dataset.get("source"), dict) else {}
     oracle = dataset.get("oracle") if isinstance(dataset.get("oracle"), dict) else {}
+    required_params = _string_list(dataset.get("required_params"))
+    if _has_sql_fields(dataset):
+        issues.append(
+            {
+                "severity": "warning",
+                "type": "sql_fields_ignored",
+                "message": f"{dataset_key}: SQL fields are ignored. Keep SQL in retriever tool functions.",
+            }
+        )
     normalized = {
         "display_name": str(dataset.get("display_name") or dataset_key).strip(),
         "description": str(dataset.get("description") or "").strip(),
@@ -87,18 +107,13 @@ def _normalize_dataset(dataset_key: str, value: Any, issues: list[Dict[str, Any]
         "question_examples": _string_list(dataset.get("question_examples") or dataset.get("example_questions")),
         "tool_name": str(dataset.get("tool_name") or (dataset.get("tool", {}) if isinstance(dataset.get("tool"), dict) else {}).get("name") or f"get_{dataset_key}_data").strip(),
         "source_type": str(dataset.get("source_type") or source.get("type") or "oracle").strip(),
-        "required_params": _string_list(dataset.get("required_params")),
+        "required_params": required_params,
+        "format_params": _normalize_format_params(dataset, required_params, issues, dataset_key),
         "db_key": str(dataset.get("db_key") or oracle.get("db_key") or "").strip(),
         "table_name": str(dataset.get("table_name") or dataset.get("table") or "").strip(),
-        "sql_template": _normalize_sql(dataset),
-        "bind_params": dataset.get("bind_params") if isinstance(dataset.get("bind_params"), dict) else {},
         "columns": _normalize_columns(dataset.get("columns"), dataset_key, issues),
     }
     return normalized
-
-
-def _sql_binds(sql_template: str) -> set[str]:
-    return set(SQL_BIND_RE.findall(sql_template or ""))
 
 
 def _existing_keyword_owners(existing_table_items: list[Dict[str, Any]]) -> Dict[str, str]:
@@ -141,30 +156,15 @@ def normalize_and_validate_table_catalog(
             issues.append({"severity": "warning", "type": "missing_keywords", "message": f"{dataset_key}: keywords are empty."})
         if dataset["source_type"] == "oracle" and not dataset["db_key"]:
             issues.append({"severity": "error", "type": "missing_db_key", "message": f"{dataset_key}: oracle dataset requires db_key."})
-        if not dataset["sql_template"]:
-            issues.append({"severity": "error", "type": "missing_sql", "message": f"{dataset_key}: sql_template is empty."})
         if not dataset["columns"]:
             issues.append({"severity": "warning", "type": "missing_columns", "message": f"{dataset_key}: columns are empty."})
-
-        binds = _sql_binds(dataset["sql_template"])
-        bind_params = {str(key): str(value) for key, value in dataset["bind_params"].items()}
-        missing_bind_params = sorted(bind for bind in binds if bind not in bind_params)
-        if missing_bind_params:
-            issues.append(
-                {
-                    "severity": "error",
-                    "type": "missing_bind_params",
-                    "message": f"{dataset_key}: bind_params missing SQL binds {missing_bind_params}.",
-                }
-            )
-        mapped_params = set(bind_params.values())
-        missing_required = sorted(param for param in dataset["required_params"] if param not in mapped_params)
-        if missing_required and binds:
+        missing_format_params = sorted(param for param in dataset["required_params"] if param not in dataset["format_params"])
+        if missing_format_params:
             issues.append(
                 {
                     "severity": "warning",
-                    "type": "required_param_not_mapped",
-                    "message": f"{dataset_key}: required_params not mapped by bind_params {missing_required}.",
+                    "type": "required_param_not_formatted",
+                    "message": f"{dataset_key}: required_params not listed in format_params {missing_format_params}.",
                 }
             )
         for keyword in dataset["keywords"]:
@@ -178,6 +178,8 @@ def normalize_and_validate_table_catalog(
         "status": raw_catalog.get("status") or "active",
         "datasets": datasets,
     }
+    if raw_catalog.get("version"):
+        table_catalog["version"] = raw_catalog.get("version")
     return {
         "can_save": bool(datasets) and not any(issue["severity"] == "error" for issue in issues),
         "table_catalog": table_catalog,

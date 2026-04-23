@@ -80,26 +80,7 @@ DEFAULT_TABLE_CATALOG_JSON = '''{
       "required_params": ["date"],
       "db_key": "MES",
       "table_name": "PROD_TABLE",
-      "sql_template": """
-SELECT
-    WORK_DT,
-    OPER_NAME,
-    MODE,
-    DEN,
-    TECH,
-    MCP_NO,
-    PKG_TYPE1,
-    PKG_TYPE2,
-    LINE,
-    QTY AS production
-FROM PROD_TABLE
-WHERE WORK_DT = :date
-  AND NVL(DELETE_FLAG, 'N') = 'N'
-  AND SITE_CODE = "K1"
-""",
-      "bind_params": {
-        "date": "date"
-      },
+      "format_params": ["date"],
       "columns": [
         {"name": "WORK_DT", "type": "date", "description": "작업일"},
         {"name": "OPER_NAME", "type": "string", "description": "공정명"},
@@ -130,7 +111,7 @@ class TableCatalogJsonInput(Component):
         MultilineInput(
             name="table_catalog_json",
             display_name="Table Catalog JSON",
-            info='Paste table catalog text. For copy-paste SQL, use "sql_template": """...""".',
+            info="Paste optional source metadata such as table names, db keys, format params, and columns. SQL lives in retriever tool functions.",
             value=DEFAULT_TABLE_CATALOG_JSON,
         ),
     ]

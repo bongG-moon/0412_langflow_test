@@ -161,14 +161,6 @@ def _empty_domain_payload() -> Dict[str, Any]:
     }
 
 
-def _empty_table_catalog_payload() -> Dict[str, Any]:
-    return {
-        "table_catalog": {"catalog_id": "empty", "datasets": {}},
-        "table_catalog_prompt_context": {"datasets": {}},
-        "table_catalog_errors": ["Table catalog payload was empty."],
-    }
-
-
 def _as_list(value: Any) -> list[Any]:
     if value is None:
         return []
@@ -271,25 +263,6 @@ def _normalize_domain_payload(value: Any) -> Dict[str, Any]:
     return domain_payload
 
 
-def _normalize_table_catalog_payload(value: Any) -> Dict[str, Any]:
-    payload = _payload_from_value(value)
-    if not payload:
-        return _empty_table_catalog_payload()
-    if isinstance(payload.get("table_catalog_payload"), dict):
-        payload = payload["table_catalog_payload"]
-    table_catalog = payload.get("table_catalog")
-    if not isinstance(table_catalog, dict):
-        table_catalog = {
-            "catalog_id": payload.get("catalog_id", "table_catalog_payload"),
-            "datasets": payload.get("datasets") if isinstance(payload.get("datasets"), dict) else {},
-        }
-    table_catalog_payload = deepcopy(payload)
-    table_catalog_payload["table_catalog"] = table_catalog
-    table_catalog_payload.setdefault("table_catalog_prompt_context", {"datasets": {}})
-    table_catalog_payload.setdefault("table_catalog_errors", [])
-    return table_catalog_payload
-
-
 def build_main_context(
     user_question_value: Any,
     agent_state_payload: Any,
@@ -297,9 +270,11 @@ def build_main_context(
     reference_date_value: Any = "",
     table_catalog_payload_value: Any = None,
 ) -> Dict[str, Any]:
+    # Backward-compatible parameter: table/source catalogs now enter later
+    # retrieval and analysis nodes instead of the first-turn LLM context.
+    del table_catalog_payload_value
     agent_state = _get_state(agent_state_payload)
     domain_payload = _normalize_domain_payload(domain_payload_value)
-    table_catalog_payload = _normalize_table_catalog_payload(table_catalog_payload_value)
     user_question = _extract_text(user_question_value) or str(agent_state.get("pending_user_question") or "").strip()
     reference_date = str(reference_date_value or "").strip()
     main_context = {
@@ -312,10 +287,6 @@ def build_main_context(
         "domain_prompt_context": domain_payload.get("domain_prompt_context", {}),
         "domain_errors": domain_payload.get("domain_errors", []),
         "mongo_domain_load_status": domain_payload.get("mongo_domain_load_status", {}),
-        "table_catalog_payload": table_catalog_payload,
-        "table_catalog": table_catalog_payload.get("table_catalog", {}),
-        "table_catalog_prompt_context": table_catalog_payload.get("table_catalog_prompt_context", {}),
-        "table_catalog_errors": table_catalog_payload.get("table_catalog_errors", []),
     }
     return {
         "main_context": main_context,
@@ -325,9 +296,6 @@ def build_main_context(
         "domain": main_context["domain"],
         "domain_index": main_context["domain_index"],
         "domain_prompt_context": main_context["domain_prompt_context"],
-        "table_catalog_payload": table_catalog_payload,
-        "table_catalog": main_context["table_catalog"],
-        "table_catalog_prompt_context": main_context["table_catalog_prompt_context"],
     }
 
 
@@ -351,12 +319,6 @@ class MainFlowContextBuilder(Component):
             info="Output from MongoDB Domain Item Payload Loader, legacy MongoDB Domain Payload Loader, or Domain JSON Loader.",
             input_types=["Data", "JSON"],
         ),
-        DataInput(
-            name="table_catalog_payload",
-            display_name="Table Catalog Payload",
-            info="Output from Table Catalog Loader. Keeps table/query metadata separate from domain knowledge.",
-            input_types=["Data", "JSON"],
-        ),
         MessageTextInput(
             name="reference_date",
             display_name="Reference Date",
@@ -376,16 +338,12 @@ class MainFlowContextBuilder(Component):
             getattr(self, "agent_state", None),
             getattr(self, "domain_payload", None),
             getattr(self, "reference_date", ""),
-            getattr(self, "table_catalog_payload", None),
         )
         domain = payload.get("domain", {}) if isinstance(payload.get("domain"), dict) else {}
-        table_catalog = payload.get("table_catalog", {}) if isinstance(payload.get("table_catalog"), dict) else {}
-        table_datasets = table_catalog.get("datasets", {}) if isinstance(table_catalog.get("datasets"), dict) else {}
         agent_state = payload.get("agent_state", {}) if isinstance(payload.get("agent_state"), dict) else {}
         self.status = {
             "question_chars": len(str(payload.get("user_question", ""))),
             "dataset_count": len(domain.get("datasets", {})) if isinstance(domain.get("datasets"), dict) else 0,
-            "table_dataset_count": len(table_datasets),
             "turn_id": agent_state.get("turn_id"),
         }
         return _make_data(payload)

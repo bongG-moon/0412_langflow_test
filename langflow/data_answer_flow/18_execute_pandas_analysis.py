@@ -187,7 +187,116 @@ def _has_result_assignment(tree: ast.AST) -> bool:
     return False
 
 
-def _validate_python_code(code: str) -> tuple[bool, str | None]:
+def _literal_strings(node: ast.AST | None) -> list[str]:
+    if node is None:
+        return []
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return [node.value]
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        values: list[str] = []
+        for item in node.elts:
+            values.extend(_literal_strings(item))
+        return values
+    return []
+
+
+def _dict_key_strings(node: ast.AST | None) -> list[str]:
+    if not isinstance(node, ast.Dict):
+        return []
+    values: list[str] = []
+    for key in node.keys:
+        values.extend(_literal_strings(key))
+    return values
+
+
+def _called_method_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        return node.func.attr
+    return ""
+
+
+def _method_column_refs(node: ast.Call) -> list[str]:
+    method_name = _called_method_name(node)
+    refs: list[str] = []
+    if method_name in {"groupby", "sort_values", "drop_duplicates", "set_index"}:
+        if node.args:
+            refs.extend(_literal_strings(node.args[0]))
+        for keyword in node.keywords:
+            if keyword.arg in {"by", "subset", "keys"}:
+                refs.extend(_literal_strings(keyword.value))
+    elif method_name == "pivot_table":
+        for keyword in node.keywords:
+            if keyword.arg in {"values", "index", "columns"}:
+                refs.extend(_literal_strings(keyword.value))
+    elif method_name == "merge":
+        for keyword in node.keywords:
+            if keyword.arg in {"on", "left_on", "right_on"}:
+                refs.extend(_literal_strings(keyword.value))
+    elif method_name in {"agg", "aggregate"}:
+        for arg in node.args:
+            refs.extend(_dict_key_strings(arg))
+        for keyword in node.keywords:
+            value = keyword.value
+            if isinstance(value, ast.Tuple) and value.elts:
+                refs.extend(_literal_strings(value.elts[0]))
+    return refs
+
+
+def _referenced_dataframe_columns(tree: ast.AST) -> list[str]:
+    refs: list[str] = []
+    known_dataframe_attrs = {
+        "agg",
+        "aggregate",
+        "assign",
+        "columns",
+        "copy",
+        "drop",
+        "drop_duplicates",
+        "empty",
+        "groupby",
+        "head",
+        "iloc",
+        "index",
+        "loc",
+        "merge",
+        "pivot_table",
+        "rename",
+        "reset_index",
+        "shape",
+        "sort_values",
+        "tail",
+        "where",
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Subscript) and isinstance(node.ctx, ast.Load) and isinstance(node.value, ast.Name) and node.value.id == "df":
+            refs.extend(_literal_strings(node.slice))
+        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "df":
+            if node.attr not in known_dataframe_attrs and not node.attr.startswith("_"):
+                refs.append(node.attr)
+        elif isinstance(node, ast.Call):
+            refs.extend(_method_column_refs(node))
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for ref in refs:
+        text = str(ref or "").strip()
+        if text and text not in seen:
+            seen.add(text)
+            result.append(text)
+    return result
+
+
+def _validate_referenced_columns(tree: ast.AST, columns: list[str]) -> tuple[bool, str | None]:
+    available = set(columns)
+    if not available:
+        return True, None
+    missing = [column for column in _referenced_dataframe_columns(tree) if column not in available]
+    if missing:
+        return False, "Generated pandas code referenced missing dataframe column(s): " + ", ".join(missing)
+    return True, None
+
+
+def _validate_python_code(code: str, columns: list[str] | None = None) -> tuple[bool, str | None]:
     try:
         tree = ast.parse(code)
     except SyntaxError as exc:
@@ -199,6 +308,9 @@ def _validate_python_code(code: str) -> tuple[bool, str | None]:
             return False, f"허용되지 않는 이름입니다: {node.id}"
         if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
             return False, "dunder 속성 접근은 허용되지 않습니다."
+    ok, error = _validate_referenced_columns(tree, columns or [])
+    if not ok:
+        return False, error
     if not _has_result_assignment(tree):
         return False, "pandas 코드는 `result = ...` 할당이 필요합니다."
     return True, None
@@ -278,10 +390,10 @@ def _fallback_code(intent: Dict[str, Any], columns: list[str]) -> str:
 
 def _execute_code(code: str, rows: list[Dict[str, Any]], intent: Dict[str, Any]) -> Dict[str, Any]:
     pd = _load_pandas()
-    ok, error = _validate_python_code(code)
+    frame = pd.DataFrame(rows or [])
+    ok, error = _validate_python_code(code, [str(column) for column in frame.columns])
     if not ok:
         return {"success": False, "error_message": error, "data": []}
-    frame = pd.DataFrame(rows or [])
     frame, filter_notes = _apply_intent_filters(frame, intent)
     local_vars = {"df": frame.copy(), "pd": pd, "result": None}
     safe_globals = {"__builtins__": SAFE_BUILTINS}
@@ -354,11 +466,13 @@ def execute_pandas_analysis(analysis_context_payload: Any, analysis_plan_payload
 
     executed = _execute_code(code, rows, intent)
     if not executed.get("success") and analysis_logic != "fallback":
+        primary_error = str(executed.get("error_message") or "")
         fallback = _fallback_code(intent, [str(column) for column in columns])
         fallback_executed = _execute_code(fallback, rows, intent)
         if fallback_executed.get("success"):
             executed = fallback_executed
-            plan = {**plan, "code": fallback, "source": "fallback_after_error", "warnings": [*plan.get("warnings", []), executed.get("error_message", "")]}
+            code = fallback
+            plan = {**plan, "code": fallback, "source": "fallback_after_error", "warnings": [*plan.get("warnings", []), primary_error]}
             analysis_logic = "fallback_after_error"
 
     source_results = context.get("source_results") if isinstance(context.get("source_results"), list) else []
