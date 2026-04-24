@@ -32,4 +32,7 @@ repository's manufacturing agent.
 - Preserve final payload shape centered on `response`, `tool_results`,
   `current_data`, and `extracted_params`.
 - If you add a UI or wrapper, keep the wrapper thin and reuse repo logic.
+- If the wrapper is a standalone Langflow custom component, keep each
+  component file self-contained and do not depend on sibling repo module
+  imports from inside the component code.
 - Do not leave harness or skill docs stale when implementation behavior changes.

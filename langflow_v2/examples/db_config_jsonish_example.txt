@@ -1,0 +1,10 @@
+{
+  "PKG_RPT": {
+    "user": "PKG_USER",
+    "password": "PKG_PASSWORD",
+    "dsn": """(DESCRIPTION=
+      (ADDRESS=(PROTOCOL=TCP)(HOST=your-host)(PORT=1521))
+      (CONNECT_DATA=(SERVICE_NAME=your-service))
+    )"""
+  }
+}

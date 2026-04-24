@@ -1,0 +1,49 @@
+{
+  "domain": {
+    "products": {},
+    "process_groups": {
+      "DA": {
+        "display_name": "Die Attach",
+        "aliases": ["DA", "D/A", "DA공정", "다이 어태치"],
+        "processes": ["D/A1", "D/A2", "D/A3"]
+      },
+      "WB": {
+        "display_name": "Wire Bond",
+        "aliases": ["WB", "W/B", "WB공정", "와이어 본딩"],
+        "processes": ["W/B1", "W/B2"]
+      }
+    },
+    "terms": {
+      "mode": {
+        "display_name": "Product Mode",
+        "aliases": ["MODE", "모드"]
+      }
+    },
+    "datasets": {
+      "production": {
+        "aliases": ["생산", "실적", "output"]
+      },
+      "target": {
+        "aliases": ["목표", "계획", "target"]
+      }
+    },
+    "metrics": {
+      "achievement_rate": {
+        "display_name": "Achievement Rate",
+        "aliases": ["달성률", "목표 대비", "achievement", "achievement rate"],
+        "required_datasets": ["production", "target"],
+        "formula": "sum(production) / sum(target) * 100",
+        "output_column": "achievement_rate",
+        "grouping_hint": ["MODE", "OPER_NAME"]
+      }
+    },
+    "join_rules": [
+      {
+        "name": "production_target_daily_join",
+        "left_dataset": "production",
+        "right_dataset": "target",
+        "keys": ["WORK_DT", "OPER_NAME", "OPER_NUM", "MODE", "DEN", "TECH", "MCP_NO"]
+      }
+    ]
+  }
+}

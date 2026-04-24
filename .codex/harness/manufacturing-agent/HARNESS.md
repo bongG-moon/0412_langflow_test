@@ -26,6 +26,9 @@ Preserve the same execution semantics across supported surfaces:
    changes done.
 6. If a stable behavior rule changes, update this harness and the relevant
    skill files in the same change set.
+7. Langflow standalone custom components must be self-contained. Do not require
+   sibling repository module imports such as `from langflow_v2.common import ...`
+   inside component files intended for direct Langflow registration.
 
 ## Preferred Entry Points
 
@@ -54,6 +57,13 @@ Always preserve:
 
 If a runtime surface does not natively support sessions, emulate them with a
 persisted state snapshot keyed by session id.
+
+## Langflow Standalone Components
+
+For standalone Langflow custom components, each component file should include
+the minimal helper code it needs. Shared helper modules can be useful for local
+development, but they must not be required by the component code pasted or
+registered in Langflow.
 
 ## References
 

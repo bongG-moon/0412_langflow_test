@@ -1,0 +1,106 @@
+[
+  {
+    "gbn": "process_groups",
+    "key": "DA",
+    "status": "active",
+    "payload": {
+      "display_name": "Die Attach",
+      "aliases": ["DA", "D/A", "DA공정", "다이 어태치"],
+      "processes": ["D/A1", "D/A2", "D/A3"]
+    },
+    "created_at": "2026-04-24T00:00:00Z",
+    "updated_at": "2026-04-24T00:00:00Z"
+  },
+  {
+    "gbn": "process_groups",
+    "key": "WB",
+    "status": "active",
+    "payload": {
+      "display_name": "Wire Bond",
+      "aliases": ["WB", "W/B", "WB공정", "와이어 본딩"],
+      "processes": ["W/B1", "W/B2"]
+    },
+    "created_at": "2026-04-24T00:00:00Z",
+    "updated_at": "2026-04-24T00:00:00Z"
+  },
+  {
+    "gbn": "datasets",
+    "key": "production",
+    "status": "active",
+    "payload": {
+      "aliases": ["생산", "실적", "output", "production"],
+      "primary_quantity_column": "production",
+      "default_group_by": ["OPER_NAME", "MODE"]
+    },
+    "created_at": "2026-04-24T00:00:00Z",
+    "updated_at": "2026-04-24T00:00:00Z"
+  },
+  {
+    "gbn": "datasets",
+    "key": "target",
+    "status": "active",
+    "payload": {
+      "aliases": ["목표", "계획", "target", "plan"],
+      "primary_quantity_column": "target",
+      "default_group_by": ["OPER_NAME", "MODE"]
+    },
+    "created_at": "2026-04-24T00:00:00Z",
+    "updated_at": "2026-04-24T00:00:00Z"
+  },
+  {
+    "gbn": "terms",
+    "key": "mode",
+    "status": "active",
+    "payload": {
+      "display_name": "Product Mode",
+      "aliases": ["MODE", "모드"],
+      "column_candidates": ["MODE"]
+    },
+    "created_at": "2026-04-24T00:00:00Z",
+    "updated_at": "2026-04-24T00:00:00Z"
+  },
+  {
+    "gbn": "metrics",
+    "key": "achievement_rate",
+    "status": "active",
+    "payload": {
+      "display_name": "Achievement Rate",
+      "aliases": ["달성률", "목표 대비", "achievement", "achievement rate"],
+      "required_datasets": ["production", "target"],
+      "formula": "sum(production) / sum(target) * 100",
+      "output_column": "achievement_rate",
+      "source_columns": ["production", "target"],
+      "grouping_hint": ["MODE", "OPER_NAME"]
+    },
+    "created_at": "2026-04-24T00:00:00Z",
+    "updated_at": "2026-04-24T00:00:00Z"
+  },
+  {
+    "gbn": "metrics",
+    "key": "defect_rate",
+    "status": "active",
+    "payload": {
+      "display_name": "Defect Rate",
+      "aliases": ["불량률", "defect rate"],
+      "required_datasets": ["defect"],
+      "formula": "sum(defect_qty) / sum(inspection_qty) * 100",
+      "output_column": "defect_rate",
+      "source_columns": ["defect_qty", "inspection_qty"]
+    },
+    "created_at": "2026-04-24T00:00:00Z",
+    "updated_at": "2026-04-24T00:00:00Z"
+  },
+  {
+    "gbn": "join_rules",
+    "key": "production_target_daily_join",
+    "status": "active",
+    "payload": {
+      "left_dataset": "production",
+      "right_dataset": "target",
+      "keys": ["WORK_DT", "OPER_NAME", "OPER_NUM", "MODE", "DEN", "TECH", "MCP_NO"],
+      "join_type": "inner"
+    },
+    "created_at": "2026-04-24T00:00:00Z",
+    "updated_at": "2026-04-24T00:00:00Z"
+  }
+]
