@@ -11,7 +11,27 @@
       "db_key": "PKG_RPT",
       "required_params": ["date"],
       "param_format": {"date": "YYYYMMDD"},
-      "grain": ["WORK_DT", "OPER_NAME", "MODE", "DEN", "TECH"]
+      "grain": ["WORK_DT", "OPER_NAME", "MODE", "DEN", "TECH"],
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "Work date"},
+        {"name": "OPER_NAME", "type": "string", "description": "Process name"},
+        {"name": "MODE", "type": "string", "description": "Product mode"},
+        {"name": "LINE", "type": "string", "description": "Line"},
+        {"name": "DEN", "type": "string", "description": "Density"},
+        {"name": "TECH", "type": "string", "description": "Technology"},
+        {"name": "MCP_NO", "type": "string", "description": "MCP product code"},
+        {"name": "PKG_TYPE1", "type": "string", "description": "Package type"},
+        {"name": "production", "type": "number", "description": "Production quantity"}
+      ],
+      "filter_mappings": {
+        "process_name": ["OPER_NAME"],
+        "mode": ["MODE"],
+        "line": ["LINE"],
+        "den": ["DEN"],
+        "tech": ["TECH"],
+        "mcp_no": ["MCP_NO"],
+        "product_name": ["MCP_NO", "MODE", "DEN", "TECH", "PKG_TYPE1"]
+      }
     },
     "target": {
       "display_name": "Production Target",
@@ -22,87 +42,26 @@
       "db_key": "PKG_RPT",
       "required_params": ["date"],
       "param_format": {"date": "YYYYMMDD"},
-      "grain": ["WORK_DT", "OPER_NAME", "MODE", "DEN", "TECH"]
-    },
-    "wip": {
-      "display_name": "WIP",
-      "description": "Work-in-process quantity and waiting status.",
-      "keywords": ["wip", "work in process", "재공", "대기"],
-      "tool_name": "get_wip_status",
-      "db_key": "PKG_RPT",
-      "required_params": ["date"],
-      "param_format": {"date": "YYYYMMDD"},
-      "grain": ["WORK_DT", "OPER_NAME", "MODE", "LINE"]
-    },
-    "equipment": {
-      "display_name": "Equipment",
-      "description": "Equipment utilization and planned/actual operating hours.",
-      "keywords": ["equipment", "tool", "utilization", "설비", "가동률"],
-      "tool_name": "get_equipment_status",
-      "db_key": "PKG_RPT",
-      "required_params": ["date"],
-      "param_format": {"date": "YYYYMMDD"},
-      "grain": ["WORK_DT", "OPER_NAME", "equipment_id"]
-    },
-    "defect": {
-      "display_name": "Defect",
-      "description": "Inspection quantity, defect quantity, and defect rate.",
-      "keywords": ["defect", "reject", "불량", "불량률", "검사"],
-      "tool_name": "get_defect_rate",
-      "db_key": "PKG_RPT",
-      "required_params": ["date"],
-      "param_format": {"date": "YYYYMMDD"},
-      "grain": ["WORK_DT", "OPER_NAME", "MODE"]
-    },
-    "yield": {
-      "display_name": "Yield",
-      "description": "Tested quantity, pass quantity, and yield rate.",
-      "keywords": ["yield", "pass", "수율", "양품"],
-      "tool_name": "get_yield_data",
-      "db_key": "PKG_RPT",
-      "required_params": ["date"],
-      "param_format": {"date": "YYYYMMDD"},
-      "grain": ["WORK_DT", "OPER_NAME", "MODE"]
-    },
-    "hold": {
-      "display_name": "Hold Lot",
-      "description": "Held lot quantity and hold reason.",
-      "keywords": ["hold", "held lot", "보류", "홀드"],
-      "tool_name": "get_hold_lot_data",
-      "db_key": "PKG_RPT",
-      "required_params": ["date"],
-      "param_format": {"date": "YYYYMMDD"},
-      "grain": ["WORK_DT", "OPER_NAME", "lot_id"]
-    },
-    "scrap": {
-      "display_name": "Scrap",
-      "description": "Scrap quantity and loss category.",
-      "keywords": ["scrap", "loss", "폐기", "스크랩", "손실"],
-      "tool_name": "get_scrap_data",
-      "db_key": "PKG_RPT",
-      "required_params": ["date"],
-      "param_format": {"date": "YYYYMMDD"},
-      "grain": ["WORK_DT", "OPER_NAME", "MODE"]
-    },
-    "recipe": {
-      "display_name": "Recipe Condition",
-      "description": "Recipe and process-condition history.",
-      "keywords": ["recipe", "condition", "parameter", "레시피", "조건"],
-      "tool_name": "get_recipe_condition_data",
-      "db_key": "PKG_RPT",
-      "required_params": ["date"],
-      "param_format": {"date": "YYYYMMDD"},
-      "grain": ["WORK_DT", "OPER_NAME", "recipe_id"]
-    },
-    "lot_trace": {
-      "display_name": "Lot Trace",
-      "description": "Lot movement and process trace history.",
-      "keywords": ["lot", "trace", "history", "이력", "추적"],
-      "tool_name": "get_lot_trace_data",
-      "db_key": "PKG_RPT",
-      "required_params": ["lot_id"],
-      "param_format": {"lot_id": "LOT-*"},
-      "grain": ["lot_id", "OPER_NAME", "event_time"]
+      "grain": ["WORK_DT", "OPER_NAME", "MODE", "DEN", "TECH"],
+      "columns": [
+        {"name": "WORK_DT", "type": "date"},
+        {"name": "OPER_NAME", "type": "string"},
+        {"name": "MODE", "type": "string"},
+        {"name": "LINE", "type": "string"},
+        {"name": "DEN", "type": "string"},
+        {"name": "TECH", "type": "string"},
+        {"name": "MCP_NO", "type": "string"},
+        {"name": "target", "type": "number"}
+      ],
+      "filter_mappings": {
+        "process_name": ["OPER_NAME"],
+        "mode": ["MODE"],
+        "line": ["LINE"],
+        "den": ["DEN"],
+        "tech": ["TECH"],
+        "mcp_no": ["MCP_NO"],
+        "product_name": ["MCP_NO", "MODE", "DEN", "TECH"]
+      }
     }
   }
 }

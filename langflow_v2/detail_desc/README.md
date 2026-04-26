@@ -85,4 +85,4 @@ v2 노드는 Langflow standalone custom component 방식입니다.
 - `continue`, `return`, `or`, list comprehension, dict merge처럼 Python 초보자가 헷갈리기 쉬운 문법은 문장으로 풀어씁니다.
 - 모든 fallback/import helper를 길게 반복하지는 않고, 노드 동작을 바꾸는 핵심 함수 위주로 해석합니다.
 
-예를 들어 `09_dummy_data_retriever.md`의 `_apply_filters` 설명은 이 기준의 대표 예시입니다.
+예를 들어 `10_dummy_data_retriever.md`의 `_apply_filters` 설명은 이 기준의 대표 예시입니다.

@@ -1,0 +1,46 @@
+{
+  "filter_set_id": "manufacturing_main_flow_example",
+  "description": "Standard semantic filter keys. Put value expansion rules in domain.process_groups.",
+  "filters": {
+    "process_name": {
+      "display_name": "Process",
+      "description": "Manufacturing process or operation name.",
+      "aliases": ["process", "process_name", "process_nm", "oper", "operation", "process label"]
+    },
+    "mode": {
+      "display_name": "Mode",
+      "description": "Product mode or product family.",
+      "aliases": ["mode", "product mode"]
+    },
+    "line": {
+      "display_name": "Line",
+      "description": "Manufacturing line.",
+      "aliases": ["line", "line_name"]
+    },
+    "product_name": {
+      "display_name": "Product",
+      "description": "Product name or product-like identifier.",
+      "aliases": ["product", "product_name", "part", "device"]
+    },
+    "equipment_id": {
+      "display_name": "Equipment ID",
+      "description": "Equipment, tool, or machine identifier.",
+      "aliases": ["equipment", "equipment_id", "eqp", "tool"]
+    },
+    "den": {
+      "display_name": "Density",
+      "description": "Memory density.",
+      "aliases": ["den", "density"]
+    },
+    "tech": {
+      "display_name": "Technology",
+      "description": "Product or package technology.",
+      "aliases": ["tech", "technology"]
+    },
+    "mcp_no": {
+      "display_name": "MCP No",
+      "description": "MCP or product code.",
+      "aliases": ["mcp", "mcp_no", "mcp number"]
+    }
+  }
+}

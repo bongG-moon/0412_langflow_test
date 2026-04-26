@@ -9,28 +9,29 @@ state_mod = importlib.import_module("langflow_v2.01_state_loader")
 mongo_domain_mod = importlib.import_module("langflow_v2.02_mongodb_domain_loader")
 domain_json_mod = importlib.import_module("langflow_v2.03_domain_json_loader")
 table_loader_mod = importlib.import_module("langflow_v2.04_table_catalog_loader")
-intent_prompt_mod = importlib.import_module("langflow_v2.05_build_intent_prompt")
-llm_mod = importlib.import_module("langflow_v2.06_llm_json_caller")
-intent_normalize_mod = importlib.import_module("langflow_v2.07_normalize_intent_plan")
-intent_router_mod = importlib.import_module("langflow_v2.08_intent_route_router")
-dummy_mod = importlib.import_module("langflow_v2.09_dummy_data_retriever")
-oracle_mod = importlib.import_module("langflow_v2.10_oracle_data_retriever")
-current_mod = importlib.import_module("langflow_v2.12_current_data_retriever")
-retrieval_merger_mod = importlib.import_module("langflow_v2.14_retrieval_payload_merger")
-early_mod = importlib.import_module("langflow_v2.13_early_result_adapter")
-post_router_mod = importlib.import_module("langflow_v2.15_retrieval_postprocess_router")
-direct_mod = importlib.import_module("langflow_v2.16_direct_result_adapter")
-pandas_prompt_mod = importlib.import_module("langflow_v2.17_build_pandas_prompt")
-pandas_normalize_mod = importlib.import_module("langflow_v2.18_normalize_pandas_plan")
-pandas_executor_mod = importlib.import_module("langflow_v2.19_pandas_analysis_executor")
-merger_mod = importlib.import_module("langflow_v2.20_analysis_result_merger")
-answer_prompt_mod = importlib.import_module("langflow_v2.22_build_final_answer_prompt")
-answer_normalize_mod = importlib.import_module("langflow_v2.23_normalize_answer_text")
-final_mod = importlib.import_module("langflow_v2.24_final_answer_builder")
+main_filters_mod = importlib.import_module("langflow_v2.05_main_flow_filters_loader")
+intent_prompt_mod = importlib.import_module("langflow_v2.06_build_intent_prompt")
+llm_mod = importlib.import_module("langflow_v2.07_llm_json_caller")
+intent_normalize_mod = importlib.import_module("langflow_v2.08_normalize_intent_plan")
+intent_router_mod = importlib.import_module("langflow_v2.09_intent_route_router")
+dummy_mod = importlib.import_module("langflow_v2.10_dummy_data_retriever")
+oracle_mod = importlib.import_module("langflow_v2.11_oracle_data_retriever")
+current_mod = importlib.import_module("langflow_v2.13_current_data_retriever")
+retrieval_merger_mod = importlib.import_module("langflow_v2.15_retrieval_payload_merger")
+early_mod = importlib.import_module("langflow_v2.14_early_result_adapter")
+post_router_mod = importlib.import_module("langflow_v2.16_retrieval_postprocess_router")
+direct_mod = importlib.import_module("langflow_v2.17_direct_result_adapter")
+pandas_prompt_mod = importlib.import_module("langflow_v2.18_build_pandas_prompt")
+pandas_normalize_mod = importlib.import_module("langflow_v2.19_normalize_pandas_plan")
+pandas_executor_mod = importlib.import_module("langflow_v2.20_pandas_analysis_executor")
+merger_mod = importlib.import_module("langflow_v2.21_analysis_result_merger")
+answer_prompt_mod = importlib.import_module("langflow_v2.23_build_final_answer_prompt")
+answer_normalize_mod = importlib.import_module("langflow_v2.24_normalize_answer_text")
+final_mod = importlib.import_module("langflow_v2.25_final_answer_builder")
 memory_extract_mod = importlib.import_module("langflow_v2.00_state_memory_extractor")
-memory_builder_mod = importlib.import_module("langflow_v2.25_state_memory_message_builder")
-mongo_store_mod = importlib.import_module("langflow_v2.21_mongodb_data_store")
-mongo_loader_mod = importlib.import_module("langflow_v2.11_mongodb_data_loader")
+memory_builder_mod = importlib.import_module("langflow_v2.26_state_memory_message_builder")
+mongo_store_mod = importlib.import_module("langflow_v2.22_mongodb_data_store")
+mongo_loader_mod = importlib.import_module("langflow_v2.12_mongodb_data_loader")
 
 
 TABLE_CATALOG = {
@@ -42,6 +43,8 @@ TABLE_CATALOG = {
             "tool_name": "get_production_data",
             "db_key": "PKG_RPT",
             "required_params": ["date"],
+            "columns": [{"name": "WORK_DT"}, {"name": "OPER_NAME"}, {"name": "MODE"}, {"name": "LINE"}, {"name": "DEN"}, {"name": "TECH"}, {"name": "MCP_NO"}, {"name": "PKG_TYPE1"}, {"name": "production"}],
+            "filter_mappings": {"process_name": ["OPER_NAME"], "mode": ["MODE"], "line": ["LINE"], "den": ["DEN"], "tech": ["TECH"], "mcp_no": ["MCP_NO"], "product_name": ["MCP_NO", "MODE", "DEN", "TECH"]},
         },
         "target": {
             "display_name": "Target",
@@ -50,7 +53,24 @@ TABLE_CATALOG = {
             "tool_name": "get_target_data",
             "db_key": "PKG_RPT",
             "required_params": ["date"],
+            "columns": [{"name": "WORK_DT"}, {"name": "OPER_NAME"}, {"name": "MODE"}, {"name": "LINE"}, {"name": "DEN"}, {"name": "TECH"}, {"name": "MCP_NO"}, {"name": "PKG_TYPE1"}, {"name": "target"}],
+            "filter_mappings": {"process_name": ["OPER_NAME"], "mode": ["MODE"], "line": ["LINE"], "den": ["DEN"], "tech": ["TECH"], "mcp_no": ["MCP_NO"], "product_name": ["MCP_NO", "MODE", "DEN", "TECH"]},
         },
+    }
+}
+
+MAIN_FLOW_FILTERS = {
+    "filters": {
+        "process_name": {
+            "aliases": ["process", "process_name", "oper", "공정"],
+        },
+        "mode": {"aliases": ["mode", "모드"]},
+        "line": {"aliases": ["line", "라인"]},
+        "product_name": {"aliases": ["product", "제품"]},
+        "equipment_id": {"aliases": ["equipment", "설비"]},
+        "den": {"aliases": ["den", "density"]},
+        "tech": {"aliases": ["tech"]},
+        "mcp_no": {"aliases": ["mcp", "mcp_no"]},
     }
 }
 
@@ -60,12 +80,12 @@ DOMAIN_PAYLOAD = {
         "process_groups": {
             "DA": {
                 "display_name": "Die Attach",
-                "aliases": ["DA", "D/A", "DA process"],
+                "aliases": ["DA", "D/A", "DA공정", "D/A공정", "DA process"],
                 "processes": ["D/A1", "D/A2", "D/A3"],
             },
             "WB": {
                 "display_name": "Wire Bond",
-                "aliases": ["WB", "W/B", "WB공정"],
+                "aliases": ["WB", "W/B", "WB공정", "W/B공정"],
                 "processes": ["W/B1", "W/B2"],
             }
         },
@@ -91,8 +111,9 @@ def run_visible_branch_flow(question, previous_state=None, session_id="session-a
     state = state_mod.load_state(question, previous_state, session_id)
     domain_payload = domain_json_mod._normalize_domain_payload(DOMAIN_PAYLOAD)
     table_payload = table_loader_mod.load_table_catalog(TABLE_CATALOG)
+    main_filters_payload = main_filters_mod.load_main_flow_filters(MAIN_FLOW_FILTERS)
 
-    intent_prompt = intent_prompt_mod.build_intent_prompt(state, domain_payload, table_payload, "2026-04-24")
+    intent_prompt = intent_prompt_mod.build_intent_prompt(state, domain_payload, table_payload, main_filters_payload, "2026-04-24")
     intent_llm = llm_mod.call_llm_json(intent_prompt)
     planned = intent_normalize_mod.normalize_intent_plan(intent_llm)
 
@@ -335,11 +356,39 @@ class LangflowV2SimplifiedFlowTests(unittest.TestCase):
         self.assertEqual(plan["query_mode"], "retrieval")
         self.assertEqual(plan["route"], "single_retrieval")
 
+    def test_relative_date_keyword_overrides_llm_hallucinated_date(self):
+        prompt_payload = {
+            "state": {"pending_user_question": "오늘 생산 보여줘"},
+            "domain": DOMAIN_PAYLOAD["domain"],
+            "table_catalog": TABLE_CATALOG,
+            "main_flow_filters": MAIN_FLOW_FILTERS,
+            "user_question": "오늘 생산 보여줘",
+            "reference_date": "2026-04-26",
+        }
+        llm_result = {
+            "llm_result": {
+                "prompt_payload": prompt_payload,
+                "llm_text": """{
+                  "request_type": "data_question",
+                  "query_mode": "retrieval",
+                  "needed_datasets": ["production"],
+                  "required_params": {"date": "20250522"},
+                  "filters": {},
+                  "needs_pandas": false
+                }""",
+            }
+        }
+
+        plan = intent_normalize_mod.normalize_intent_plan(llm_result)["intent_plan"]
+
+        self.assertEqual(plan["required_params"]["date"], "20260426")
+
     def test_metric_domain_expands_single_dataset_llm_plan_to_multi_retrieval(self):
         state = state_mod.load_state("어제 wb공정 생산달성율을 mode별로 알려줘", None, "metric-session")
         domain_payload = domain_json_mod._normalize_domain_payload(DOMAIN_PAYLOAD)
         table_payload = table_loader_mod.load_table_catalog(TABLE_CATALOG)
-        prompt_payload = intent_prompt_mod.build_intent_prompt(state, domain_payload, table_payload, "2026-04-25")["prompt_payload"]
+        main_filters_payload = main_filters_mod.load_main_flow_filters(MAIN_FLOW_FILTERS)
+        prompt_payload = intent_prompt_mod.build_intent_prompt(state, domain_payload, table_payload, main_filters_payload, "2026-04-25")["prompt_payload"]
         llm_result = {
             "llm_result": {
                 "prompt_payload": prompt_payload,
@@ -366,6 +415,66 @@ class LangflowV2SimplifiedFlowTests(unittest.TestCase):
         self.assertEqual(plan["group_by"], ["MODE"])
         self.assertTrue(plan["needs_pandas"])
         self.assertEqual(plan["metric_keys"], ["achievement_rate"])
+
+    def test_semantic_filter_plan_maps_standard_keys_to_dataset_columns(self):
+        result = run_visible_branch_flow("20260422 WB공정 DDR5 production")
+        plan = result["planned"]["intent_plan"]
+
+        self.assertEqual(plan["filters"]["process_name"], ["W/B1", "W/B2"])
+        self.assertEqual(plan["filters"]["mode"], ["DDR5"])
+        self.assertTrue(any(item["field"] == "process_name" and item["columns"] == ["OPER_NAME"] for item in plan["filter_plan"]))
+        self.assertTrue(any(item["field"] == "mode" and item["columns"] == ["MODE"] for item in plan["filter_plan"]))
+
+    def test_required_param_change_forces_retrieval_on_followup_like_question(self):
+        first = run_visible_branch_flow("오늘 DA공정 DDR5 생산 보여줘")
+        first_final = final_mod.build_final_answer(first["merged"], first["answer_text"], "200", "5")
+
+        second = run_visible_branch_flow("어제 WB공정은?", {"state": first_final["next_state"]}, "session-a")
+        plan = second["planned"]["intent_plan"]
+
+        self.assertEqual(plan["query_mode"], "retrieval")
+        self.assertEqual(plan["required_params"]["date"], "20260423")
+        self.assertEqual(plan["filters"]["process_name"], ["W/B1", "W/B2"])
+        self.assertTrue(plan["required_param_changed"])
+
+    def test_filter_outside_current_scope_forces_retrieval(self):
+        first = run_visible_branch_flow("20260422 D/A3 DDR5 production")
+        first_final = final_mod.build_final_answer(first["merged"], first["answer_text"], "200", "5")
+
+        second = run_visible_branch_flow("그중 WB공정은?", {"state": first_final["next_state"]}, "session-a")
+        plan = second["planned"]["intent_plan"]
+
+        self.assertEqual(plan["query_mode"], "retrieval")
+        self.assertEqual(plan["filters"]["process_name"], ["W/B1", "W/B2"])
+
+    def test_direct_column_filter_survives_without_main_flow_definition(self):
+        prompt_payload = {
+            "state": {"pending_user_question": "20260422 production PKG_TYPE1 PKG_A만 보여줘"},
+            "domain": DOMAIN_PAYLOAD["domain"],
+            "table_catalog": TABLE_CATALOG,
+            "main_flow_filters": MAIN_FLOW_FILTERS,
+            "user_question": "20260422 production PKG_TYPE1 PKG_A만 보여줘",
+            "reference_date": "2026-04-24",
+        }
+        llm_result = {
+            "llm_result": {
+                "prompt_payload": prompt_payload,
+                "llm_text": """{
+                  "request_type": "data_question",
+                  "query_mode": "retrieval",
+                  "needed_datasets": ["production"],
+                  "required_params": {"date": "20260422"},
+                  "filters": {},
+                  "column_filters": {"PKG_TYPE1": ["PKG_A"]},
+                  "needs_pandas": false
+                }""",
+            }
+        }
+
+        plan = intent_normalize_mod.normalize_intent_plan(llm_result)["intent_plan"]
+
+        self.assertEqual(plan["column_filters"], {"PKG_TYPE1": ["PKG_A"]})
+        self.assertTrue(any(item["kind"] == "column" and item["columns"] == ["PKG_TYPE1"] for item in plan["filter_plan"]))
 
     def test_korean_achievement_rate_query_runs_multi_retrieval_and_calculation(self):
         result = run_visible_branch_flow("어제 wb공정 생산달성율을 mode별로 알려줘")

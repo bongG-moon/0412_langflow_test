@@ -62,6 +62,26 @@ def parse_columns(value: Any) -> list[Dict[str, Any]]:
     return columns
 
 
+def parse_filter_mappings(value: Any) -> Dict[str, list[str]]:
+    parsed = value
+    if isinstance(value, str):
+        parsed, _errors = parse_jsonish(value)
+    if not isinstance(parsed, dict):
+        return {}
+    mappings: Dict[str, list[str]] = {}
+    for key, raw_columns in parsed.items():
+        if isinstance(raw_columns, dict):
+            raw_columns = raw_columns.get("columns") or raw_columns.get("column") or raw_columns.get("names")
+        columns = []
+        for column in as_list(raw_columns):
+            text = str(column or "").strip()
+            if text and text not in columns:
+                columns.append(text)
+        if str(key).strip() and columns:
+            mappings[str(key).strip()] = columns
+    return mappings
+
+
 def normalize_dataset(dataset_key: str, payload: Dict[str, Any], status: str = "active") -> Dict[str, Any]:
     payload = deepcopy(payload) if isinstance(payload, dict) else {}
     for key in DROP_SQL_KEYS:
@@ -85,6 +105,7 @@ def normalize_dataset(dataset_key: str, payload: Dict[str, Any], status: str = "
         "aliases": split_lines(payload.get("aliases")),
         "question_examples": split_lines(payload.get("question_examples")),
         "columns": parse_columns(payload.get("columns")),
+        "filter_mappings": parse_filter_mappings(payload.get("filter_mappings")),
         "source": "langflow_v2_registration_web",
     }
 

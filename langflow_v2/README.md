@@ -31,27 +31,28 @@ Core rules:
 | 02 | `02_mongodb_domain_loader.py` | `MongoDB Domain Loader` | Load MongoDB domain rules |
 | 03 | `03_domain_json_loader.py` | `Domain JSON Loader` | Load direct JSON domain rules |
 | 04 | `04_table_catalog_loader.py` | `Table Catalog Loader` | Load dataset/tool catalog |
-| 05 | `05_build_intent_prompt.py` | `Build Intent Prompt` | Build intent-classification prompt |
-| 06 | `06_llm_json_caller.py` | `LLM JSON Caller` | Call LLM and return raw JSON text |
-| 07 | `07_normalize_intent_plan.py` | `Normalize Intent Plan` | Normalize intent JSON and create route/retrieval jobs |
-| 08 | `08_intent_route_router.py` | `Intent Route Router` | Split into single/multi/follow-up/finish branches |
-| 09 | `09_dummy_data_retriever.py` | `Dummy Data Retriever` | Retrieve dummy data |
-| 10 | `10_oracle_data_retriever.py` | `Oracle Data Retriever` | Retrieve Oracle DB data |
-| 11 | `11_mongodb_data_loader.py` | `MongoDB Data Loader` | Load row lists back from MongoDB refs when needed |
-| 12 | `12_current_data_retriever.py` | `Current Data Retriever` | Reuse `state.current_data` for follow-up analysis |
-| 13 | `13_early_result_adapter.py` | `Early Result Adapter` | Convert finish/clarification branch to `analysis_result` |
-| 14 | `14_retrieval_payload_merger.py` | `Retrieval Payload Merger` | Merge retrieval branches |
-| 15 | `15_retrieval_postprocess_router.py` | `Retrieval Postprocess Router` | Split direct response vs pandas post-analysis |
-| 16 | `16_direct_result_adapter.py` | `Direct Result Adapter` | Convert direct retrieval result to `analysis_result` |
-| 17 | `17_build_pandas_prompt.py` | `Build Pandas Prompt` | Build pandas-code prompt |
-| 18 | `18_normalize_pandas_plan.py` | `Normalize Pandas Plan` | Normalize pandas code plan |
-| 19 | `19_pandas_analysis_executor.py` | `Pandas Analysis Executor` | Execute pandas code |
-| 20 | `20_analysis_result_merger.py` | `Analysis Result Merger` | Merge early/direct/pandas results |
-| 21 | `21_mongodb_data_store.py` | `MongoDB Data Store` | Store large row lists in MongoDB and keep compact refs |
-| 22 | `22_build_final_answer_prompt.py` | `Build Final Answer Prompt` | Build final answer prompt from analysis result |
-| 23 | `23_normalize_answer_text.py` | `Normalize Answer Text` | Normalize final-answer LLM JSON into answer text |
-| 24 | `24_final_answer_builder.py` | `Final Answer Builder` | Build final payload, chat message with final data, and next state |
-| 25 | `25_state_memory_message_builder.py` | `State Memory Message Builder` | Build a state snapshot message for Langflow Message History |
+| 05 | `05_main_flow_filters_loader.py` | `Main Flow Filters Loader` | Load shared semantic filter definitions |
+| 06 | `06_build_intent_prompt.py` | `Build Intent Prompt` | Build intent-classification prompt |
+| 07 | `07_llm_json_caller.py` | `LLM JSON Caller` | Call LLM and return raw JSON text |
+| 08 | `08_normalize_intent_plan.py` | `Normalize Intent Plan` | Normalize intent JSON and create route/retrieval jobs |
+| 09 | `09_intent_route_router.py` | `Intent Route Router` | Split into single/multi/follow-up/finish branches |
+| 10 | `10_dummy_data_retriever.py` | `Dummy Data Retriever` | Retrieve dummy data |
+| 11 | `11_oracle_data_retriever.py` | `Oracle Data Retriever` | Retrieve Oracle DB data |
+| 12 | `12_mongodb_data_loader.py` | `MongoDB Data Loader` | Load row lists back from MongoDB refs when needed |
+| 13 | `13_current_data_retriever.py` | `Current Data Retriever` | Reuse `state.current_data` for follow-up analysis |
+| 14 | `14_early_result_adapter.py` | `Early Result Adapter` | Convert finish/clarification branch to `analysis_result` |
+| 15 | `15_retrieval_payload_merger.py` | `Retrieval Payload Merger` | Merge retrieval branches |
+| 16 | `16_retrieval_postprocess_router.py` | `Retrieval Postprocess Router` | Split direct response vs pandas post-analysis |
+| 17 | `17_direct_result_adapter.py` | `Direct Result Adapter` | Convert direct retrieval result to `analysis_result` |
+| 18 | `18_build_pandas_prompt.py` | `Build Pandas Prompt` | Build pandas-code prompt |
+| 19 | `19_normalize_pandas_plan.py` | `Normalize Pandas Plan` | Normalize pandas code plan |
+| 20 | `20_pandas_analysis_executor.py` | `Pandas Analysis Executor` | Execute pandas code |
+| 21 | `21_analysis_result_merger.py` | `Analysis Result Merger` | Merge early/direct/pandas results |
+| 22 | `22_mongodb_data_store.py` | `MongoDB Data Store` | Store large row lists in MongoDB and keep compact refs |
+| 23 | `23_build_final_answer_prompt.py` | `Build Final Answer Prompt` | Build final answer prompt from analysis result |
+| 24 | `24_normalize_answer_text.py` | `Normalize Answer Text` | Normalize final-answer LLM JSON into answer text |
+| 25 | `25_final_answer_builder.py` | `Final Answer Builder` | Build final payload, chat message with final data, and next state |
+| 26 | `26_state_memory_message_builder.py` | `State Memory Message Builder` | Build a state snapshot message for Langflow Message History |
 
 ## Canvas Overview
 
@@ -67,53 +68,54 @@ Chat Input
   OR 03 Domain JSON Loader
 
 04 Table Catalog Loader
+05 Main Flow Filters Loader
 
-01 + 02/03 + 04
-  -> 05 Build Intent Prompt
-  -> 06A LLM JSON Caller (Intent)
-  -> 07 Normalize Intent Plan
-  -> 08 Intent Route Router
+01 + 02/03 + 04 + 05
+  -> 06 Build Intent Prompt
+  -> 07A LLM JSON Caller (Intent)
+  -> 08 Normalize Intent Plan
+  -> 09 Intent Route Router
 
-08.single_retrieval
-  -> 09A Dummy Retriever OR 10A Oracle Retriever
-08.multi_retrieval
-  -> 09B Dummy Retriever OR 10B Oracle Retriever
-08.followup_transform
-  -> 11 MongoDB Data Loader (optional, when current_data has data_ref)
-  -> 12 Current Data Retriever
-08.finish
-  -> 13 Early Result Adapter
+09.single_retrieval
+  -> 10A Dummy Retriever OR 11A Oracle Retriever
+09.multi_retrieval
+  -> 10B Dummy Retriever OR 11B Oracle Retriever
+09.followup_transform
+  -> 12 MongoDB Data Loader (optional, when current_data has data_ref)
+  -> 13 Current Data Retriever
+09.finish
+  -> 14 Early Result Adapter
 
-09A/10A + 09B/10B + 12
-  -> 14 Retrieval Payload Merger
-  -> 15 Retrieval Postprocess Router
+10A/11A + 10B/11B + 13
+  -> 15 Retrieval Payload Merger
+  -> 16 Retrieval Postprocess Router
 
-15.direct_response
-  -> 16 Direct Result Adapter
-15.post_analysis
-  -> 17 Build Pandas Prompt
-  -> 06B LLM JSON Caller (Pandas)
-  -> 18 Normalize Pandas Plan
-  -> 19 Pandas Analysis Executor
+16.direct_response
+  -> 17 Direct Result Adapter
+16.post_analysis
+  -> 18 Build Pandas Prompt
+  -> 07B LLM JSON Caller (Pandas)
+  -> 19 Normalize Pandas Plan
+  -> 20 Pandas Analysis Executor
 
-13 + 16 + 19
-  -> 20 Analysis Result Merger
+14 + 17 + 20
+  -> 21 Analysis Result Merger
 
-20 Analysis Result Merger
-  -> 21 MongoDB Data Store (optional compact data_ref mode)
-  -> 22 Build Final Answer Prompt
-  -> 06C LLM JSON Caller (Answer)
-  -> 23 Normalize Answer Text
+21 Analysis Result Merger
+  -> 22 MongoDB Data Store (optional compact data_ref mode)
+  -> 23 Build Final Answer Prompt
+  -> 07C LLM JSON Caller (Answer)
+  -> 24 Normalize Answer Text
 
-20 Analysis Result Merger OR 21 MongoDB Data Store
-  -> 24 Final Answer Builder.analysis_result
-23 Normalize Answer Text
-  -> 24 Final Answer Builder.answer_text
+21 Analysis Result Merger OR 22 MongoDB Data Store
+  -> 25 Final Answer Builder.analysis_result
+24 Normalize Answer Text
+  -> 25 Final Answer Builder.answer_text
 
-24 Final Answer Builder
+25 Final Answer Builder
   -> Chat Output
-24 Final Answer Builder.next_state
-  -> 25 State Memory Message Builder
+25 Final Answer Builder.next_state
+  -> 26 State Memory Message Builder
   -> Message History (Store, native Langflow)
 ```
 
@@ -129,10 +131,11 @@ Use this table as the canvas wiring checklist. The format is `Node.Port`.
 | 2A | `MongoDB Domain Loader.domain_payload` | `Build Intent Prompt.domain_payload` | Choose 1 | MongoDB domain |
 | 2B | `Domain JSON Loader.domain_payload` | `Build Intent Prompt.domain_payload` | Choose 1 | Direct JSON domain |
 | 3 | `Table Catalog Loader.table_catalog_payload` | `Build Intent Prompt.table_catalog_payload` | Required | Dataset/tool descriptions |
-| 4 | `State Loader.state_payload` | `Build Intent Prompt.state_payload` | Required | Current question and state |
-| 5 | `Build Intent Prompt.prompt_payload` | `LLM JSON Caller (Intent).prompt_payload` | Required | Intent LLM call |
-| 6 | `LLM JSON Caller (Intent).llm_result` | `Normalize Intent Plan.llm_result` | Required | Intent JSON normalization |
-| 7 | `Normalize Intent Plan.intent_plan` | `Intent Route Router.intent_plan` | Required | Visible route branch |
+| 4 | `Main Flow Filters Loader.main_flow_filters_payload` | `Build Intent Prompt.main_flow_filters_payload` | Required | Shared semantic filters and aliases |
+| 5 | `State Loader.state_payload` | `Build Intent Prompt.state_payload` | Required | Current question and state |
+| 6 | `Build Intent Prompt.prompt_payload` | `LLM JSON Caller (Intent).prompt_payload` | Required | Intent LLM call |
+| 7 | `LLM JSON Caller (Intent).llm_result` | `Normalize Intent Plan.llm_result` | Required | Intent JSON normalization |
+| 8 | `Normalize Intent Plan.intent_plan` | `Intent Route Router.intent_plan` | Required | Visible route branch |
 | 8A-1 | `Intent Route Router.single_retrieval` | `Dummy Data Retriever (Single).intent_plan` | Choose 1 | Dummy single retrieval |
 | 8A-2 | `Intent Route Router.single_retrieval` | `Oracle Data Retriever (Single).intent_plan` | Choose 1 | Oracle single retrieval |
 | 8B-1 | `Intent Route Router.multi_retrieval` | `Dummy Data Retriever (Multi).intent_plan` | Choose 1 | Dummy multi retrieval |
@@ -175,9 +178,9 @@ Use this table as the canvas wiring checklist. The format is `Node.Port`.
 
 The flow has three LLM call points:
 
-1. Intent planning: `05 -> 06A -> 07`
-2. Pandas analysis planning: `17 -> 06B -> 18`
-3. Final answer writing: `22 -> 06C -> 23`
+1. Intent planning: `06 -> 07A -> 08`
+2. Pandas analysis planning: `18 -> 07B -> 19`
+3. Final answer writing: `23 -> 07C -> 24`
 
 If an LLM API key is empty, the normalize node after that call uses fallback
 logic so the flow remains testable locally.
@@ -215,30 +218,31 @@ The usual `post_analysis` triggers are:
 | --- | --- | --- | --- |
 | `00_state_memory_extractor.py` | `memory_messages`, `memory_marker` | `previous_state` | extracts `{state, state_json}` from Langflow Message History |
 | `01_state_loader.py` | `chat_input`, `user_question`, `previous_state`, `session_id` | `state_payload` | `{user_question, state}` |
-| `02_mongodb_domain_loader.py` | `mongo_uri`, `db_name`, `collection_name`, `status`, `limit` | `domain_payload` | `{domain_payload: {domain, domain_source, domain_errors}}` |
+| `02_mongodb_domain_loader.py` | `mongo_uri`, `db_name`, `collection_name`, `domain_status`, `limit` | `domain_payload` | `{domain_payload: {domain, domain_source, domain_errors}}` |
 | `03_domain_json_loader.py` | `domain_json` | `domain_payload` | `{domain_payload: {domain, domain_source, domain_errors}}` |
 | `04_table_catalog_loader.py` | `table_catalog_json` | `table_catalog_payload` | `{table_catalog_payload: {table_catalog, table_catalog_errors}}` |
-| `05_build_intent_prompt.py` | `state_payload`, `domain_payload`, `table_catalog_payload`, `reference_date` | `prompt_payload` | `{prompt_payload: {prompt, state, domain, table_catalog}}` |
-| `06_llm_json_caller.py` | `prompt_payload`, `llm_api_key`, `model_name`, `temperature` | `llm_result` | `{llm_result: {llm_text, errors, prompt_payload}}` |
-| `07_normalize_intent_plan.py` | `llm_result`, `reference_date` | `intent_plan` | `{intent_plan, retrieval_jobs, state, domain, table_catalog}` |
-| `08_intent_route_router.py` | `intent_plan` | `single_retrieval`, `multi_retrieval`, `followup_transform`, `finish` | selected branch payload |
-| `09_dummy_data_retriever.py` | `intent_plan` | `retrieval_payload` | dummy `source_results` |
-| `10_oracle_data_retriever.py` | `intent_plan`, `db_config`, `fetch_limit` | `retrieval_payload` | Oracle `source_results` |
-| `11_mongodb_data_loader.py` | `payload`, `mongo_uri`, `db_name`, `collection_name`, `enabled` | `loaded_payload` | rehydrates row lists from `data_ref` |
-| `12_current_data_retriever.py` | `intent_plan` | `retrieval_payload` | current data as `source_results` |
-| `13_early_result_adapter.py` | `intent_plan` | `analysis_result` | finish branch result |
-| `14_retrieval_payload_merger.py` | `single_retrieval`, `multi_retrieval`, `followup_retrieval` | `retrieval_payload` | active retrieval branch |
-| `15_retrieval_postprocess_router.py` | `retrieval_payload` | `direct_response`, `post_analysis` | selected postprocess branch |
-| `16_direct_result_adapter.py` | `retrieval_payload` | `analysis_result` | direct branch result |
-| `17_build_pandas_prompt.py` | `retrieval_payload`, `domain_payload` | `prompt_payload` | pandas prompt payload |
-| `18_normalize_pandas_plan.py` | `llm_result` | `analysis_plan_payload` | pandas code plan |
-| `19_pandas_analysis_executor.py` | `analysis_plan_payload`, optional `retrieval_payload` | `analysis_result` | pandas branch result |
-| `20_analysis_result_merger.py` | `early_result`, `direct_result`, `pandas_result` | `analysis_result` | active analysis branch |
-| `21_mongodb_data_store.py` | `payload`, `mongo_uri`, `db_name`, `collection_name`, controls | `stored_payload` | replaces row lists with preview rows plus `data_ref` |
-| `22_build_final_answer_prompt.py` | `analysis_result`, `preview_row_limit` | `prompt_payload` | final answer prompt payload |
-| `23_normalize_answer_text.py` | `llm_result` | `answer_text` | `{answer_text: {response, answer_source}}` |
-| `24_final_answer_builder.py` | `analysis_result`, `answer_text`, row limits | `answer_message`, `final_result`, `next_state` | final contract, final data table, and next-state payload |
-| `25_state_memory_message_builder.py` | `next_state`, `memory_marker` | `memory_message`, `memory_payload` | stores next state as a marked Message History message |
+| `05_main_flow_filters_loader.py` | `main_flow_filters_json` | `main_flow_filters_payload` | `{main_flow_filters_payload: {main_flow_filters, main_flow_filter_errors}}` |
+| `06_build_intent_prompt.py` | `state_payload`, `domain_payload`, `table_catalog_payload`, `main_flow_filters_payload`, `reference_date` | `prompt_payload` | `{prompt_payload: {prompt, state, domain, table_catalog, main_flow_filters}}` |
+| `07_llm_json_caller.py` | `prompt_payload`, `llm_api_key`, `model_name`, `temperature` | `llm_result` | `{llm_result: {llm_text, errors, prompt_payload}}` |
+| `08_normalize_intent_plan.py` | `llm_result`, `reference_date` | `intent_plan` | `{intent_plan, retrieval_jobs, state, domain, table_catalog}` |
+| `09_intent_route_router.py` | `intent_plan` | `single_retrieval`, `multi_retrieval`, `followup_transform`, `finish` | selected branch payload |
+| `10_dummy_data_retriever.py` | `intent_plan` | `retrieval_payload` | dummy `source_results` |
+| `11_oracle_data_retriever.py` | `intent_plan`, `db_config`, `fetch_limit` | `retrieval_payload` | Oracle `source_results` |
+| `12_mongodb_data_loader.py` | `payload`, `mongo_uri`, `db_name`, `collection_name`, `enabled` | `loaded_payload` | rehydrates row lists from `data_ref` |
+| `13_current_data_retriever.py` | `intent_plan` | `retrieval_payload` | current data as `source_results` |
+| `14_early_result_adapter.py` | `intent_plan` | `analysis_result` | finish branch result |
+| `15_retrieval_payload_merger.py` | `single_retrieval`, `multi_retrieval`, `followup_retrieval` | `retrieval_payload` | active retrieval branch |
+| `16_retrieval_postprocess_router.py` | `retrieval_payload` | `direct_response`, `post_analysis` | selected postprocess branch |
+| `17_direct_result_adapter.py` | `retrieval_payload` | `analysis_result` | direct branch result |
+| `18_build_pandas_prompt.py` | `retrieval_payload`, `domain_payload` | `prompt_payload` | pandas prompt payload |
+| `19_normalize_pandas_plan.py` | `llm_result` | `analysis_plan_payload` | pandas code plan |
+| `20_pandas_analysis_executor.py` | `analysis_plan_payload`, optional `retrieval_payload` | `analysis_result` | pandas branch result |
+| `21_analysis_result_merger.py` | `early_result`, `direct_result`, `pandas_result` | `analysis_result` | active analysis branch |
+| `22_mongodb_data_store.py` | `payload`, `mongo_uri`, `db_name`, `collection_name`, controls | `stored_payload` | replaces row lists with preview rows plus `data_ref` |
+| `23_build_final_answer_prompt.py` | `analysis_result`, `preview_row_limit` | `prompt_payload` | final answer prompt payload |
+| `24_normalize_answer_text.py` | `llm_result` | `answer_text` | `{answer_text: {response, answer_source}}` |
+| `25_final_answer_builder.py` | `analysis_result`, `answer_text`, row limits | `answer_message`, `final_result`, `next_state` | final contract, final data table, and next-state payload |
+| `26_state_memory_message_builder.py` | `next_state`, `memory_marker` | `memory_message`, `memory_payload` | stores next state as a marked Message History message |
 
 ## Minimal Inputs
 
@@ -247,6 +251,7 @@ Local dummy test:
 - `State Loader.chat_input`
 - `Domain JSON Loader.domain_json`
 - `Table Catalog Loader.table_catalog_json`
+- `Main Flow Filters Loader.main_flow_filters_json`
 - `LLM JSON Caller.*.llm_api_key`: can be empty for fallback behavior
 - `LLM JSON Caller.*.model_name`: required when `llm_api_key` is set; use the model id for the configured LangChain chat model adapter
 
@@ -277,7 +282,12 @@ See `registration_web/README.md` for details.
 ## Table Catalog Input
 
 The table catalog is dataset/tool metadata. Do not put SQL here. SQL belongs in
-the individual retrieval functions inside `10_oracle_data_retriever.py`.
+the individual retrieval functions inside `11_oracle_data_retriever.py`.
+
+Use `filter_mappings` to map standard keys from `main_flow_filters` to the real
+columns in each dataset. This is what lets one table use `process`, another use
+`process_name`, and another use `process_nm` while the intent plan still says
+`process_name`.
 
 Example file: `examples/table_catalog_example.json`
 
@@ -295,14 +305,53 @@ Recommended shape:
       "db_key": "PKG_RPT",
       "required_params": ["date"],
       "param_format": {"date": "YYYYMMDD"},
-      "grain": ["WORK_DT", "OPER_NAME", "MODE"]
+      "grain": ["WORK_DT", "OPER_NAME", "MODE"],
+      "columns": [{"name": "WORK_DT"}, {"name": "OPER_NAME"}, {"name": "MODE"}, {"name": "production"}],
+      "filter_mappings": {
+        "process_name": ["OPER_NAME"],
+        "mode": ["MODE"]
+      }
     }
   }
 }
 ```
 
-Column metadata is optional because `Build Pandas Prompt` inspects actual
-columns after retrieval.
+Column metadata is optional for pandas because `Build Pandas Prompt` inspects
+actual columns after retrieval, but it is recommended because direct
+`column_filters` can only be validated against known table/current-data columns.
+
+## Main Flow Filters Input
+
+`Main Flow Filters Loader` defines common semantic filter keys once:
+`process_name`, `mode`, `line`, `product_name`, `equipment_id`, `den`, `tech`,
+and `mcp_no`. Keep this input small: it should describe filter meanings and
+alternate key names, not every possible value.
+
+Do not put operational value expansion rules here by default. For example,
+`WB공정 -> ["W/B1", "W/B2"]` belongs in `domain.process_groups`, not in
+`main_flow_filters.value_aliases`.
+
+Example file: `examples/main_flow_filters_example.json`
+
+If a condition is not defined here but the column exists in the table catalog or
+current data, the planner can still use `column_filters` with the real column
+name, for example `{"PKG_TYPE1": ["PKG_A"]}`.
+
+Optional advanced fields such as `known_values` or `value_aliases` are still
+accepted for special cases, but the recommended operating model is:
+
+- `main_flow_filters`: standard meaning keys and aliases
+- `table_catalog.filter_mappings`: standard key to real table columns
+- `domain.process_groups`: process group aliases and expansion values
+
+Follow-up behavior:
+
+- `required_params` such as `date` and `lot_id` are retrieval boundaries. If
+  they change, the next turn becomes a new retrieval.
+- Filters are inherited across follow-up questions unless the user overrides
+  them.
+- If a new filter is outside the scope of `current_data`, the next turn becomes
+  a new retrieval.
 
 ## Domain Input
 

@@ -112,6 +112,7 @@ def test_table_catalog_form_item_drops_sql_and_exports_loader_json():
             "required_params": "date",
             "keywords": "생산\nproduction",
             "columns": "WORK_DT | date | work date\nproduction | number | production quantity",
+            "filter_mappings": {"process_name": ["OPER_NAME"], "mode": ["MODE"]},
             "sql": "select * from hidden",
         },
     )
@@ -121,6 +122,7 @@ def test_table_catalog_form_item_drops_sql_and_exports_loader_json():
     assert "sql" not in item
     assert catalog["datasets"]["production"]["tool_name"] == "get_production_data"
     assert catalog["datasets"]["production"]["columns"][1]["name"] == "production"
+    assert catalog["datasets"]["production"]["filter_mappings"]["process_name"] == ["OPER_NAME"]
 
 
 def test_table_text_preview_uses_llm_items_and_still_drops_sql():
