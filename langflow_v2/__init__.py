@@ -1,1 +1,1 @@
-"""Simplified Langflow v2 components for the manufacturing agent."""
+"""Simplified Langflow components for the manufacturing agent."""

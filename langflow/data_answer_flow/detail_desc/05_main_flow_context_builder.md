@@ -8,7 +8,6 @@
 user_question
 agent_state
 domain_payload
-table_catalog_payload
 reference_date
 ```
 
@@ -30,9 +29,6 @@ Session State Loader.agent_state
 
 MongoDB Domain Item Payload Loader.domain_payload
 -> Main Flow Context Builder.domain_payload
-
-Table Catalog Loader.table_catalog_payload
--> Main Flow Context Builder.table_catalog_payload
 
 User Question
 -> Main Flow Context Builder.user_question
@@ -60,11 +56,7 @@ Main Flow Context Builder.main_context
     "domain": {},
     "domain_index": {},
     "domain_prompt_context": {},
-    "table_catalog_payload": {},
-    "table_catalog": {},
-    "table_catalog_prompt_context": {},
     "domain_errors": [],
-    "table_catalog_errors": [],
     "mongo_domain_load_status": {}
   },
   "user_question": "오늘 A제품 생산량 알려줘",
@@ -72,10 +64,7 @@ Main Flow Context Builder.main_context
   "domain_payload": {},
   "domain": {},
   "domain_index": {},
-  "domain_prompt_context": {},
-  "table_catalog_payload": {},
-  "table_catalog": {},
-  "table_catalog_prompt_context": {}
+  "domain_prompt_context": {}
 }
 ```
 
@@ -87,8 +76,8 @@ Main Flow Context Builder.main_context
 
 이 값은 `Build Intent Prompt`와 같은 LLM prompt 노드에서 token 사용량을 줄이는 데 사용된다.
 
-## table_catalog_prompt_context
+## table catalog 연결 위치
 
-`table_catalog_payload`가 들어오면 `table_catalog`, `table_catalog_prompt_context`, `table_catalog_errors`도 `main_context`에 같이 담는다.
+Table catalog는 `main_context`에 넣지 않는다. 모든 질문에서 필요하지 않은 table/source metadata를 첫 prompt부터 싣지 않기 위해서다.
 
-`table_catalog_prompt_context`는 LLM이 질문과 dataset 후보를 연결하는 데 필요한 경량 정보다. 실제 SQL, table name, db_key는 LLM prompt에 넣지 않고 실행용 `table_catalog`에만 유지한다.
+`Table Catalog Loader.table_catalog_payload`는 후단의 `Retrieval Plan Builder.table_catalog_payload`와 `OracleDB Data Retriever.table_catalog_payload`에 직접 연결한다.

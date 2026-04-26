@@ -53,27 +53,17 @@ Build Intent Prompt.prompt_payload
 
 ## Table Catalog 사용 방식
 
-`main_context.table_catalog_prompt_context`가 있으면 prompt에 함께 넣는다.
+현재 intent prompt에는 table catalog를 넣지 않는다. Dataset/source/column metadata는 실제 조회가 필요한 후단의 `Retrieval Plan Builder`와 `OracleDB Data Retriever`에 직접 전달한다.
 
-table catalog prompt context에는 다음 정보만 들어간다.
-
-- dataset display name
-- description
-- keywords
-- question examples
-- required params
-- tool name
-- 주요 column 이름/type/description
-
-실제 SQL, table name, db_key는 prompt에 넣지 않는다.
+이 노드는 token 사용량을 줄이기 위해 domain prompt context만 보고 request type, dataset hint, metric hint, required params, post-retrieval filters를 추출한다.
 
 ## 어떤 질문에 어떤 데이터가 필요한지
 
-질문과 dataset 후보의 직접 연결은 table catalog의 `keywords`, `question_examples`가 맡는다.
+질문과 dataset 후보의 1차 연결은 domain dataset keyword와 metric hint가 맡는다. Retrieval plan 단계에서 table catalog의 dataset metadata가 tool/source/required parameter를 보강한다.
 
 계산 metric과 dataset의 관계는 domain의 `metrics.required_datasets`가 맡는다.
 
-예를 들어 “생산 달성율”은 domain metric에서 `production`, `target`이 필요하다고 알려주고, table catalog가 두 dataset의 tool/required parameter/SQL 정보를 제공한다.
+예를 들어 “생산 달성율”은 domain metric에서 `production`, `target`이 필요하다고 알려주고, retrieval plan 단계에서 table catalog가 두 dataset의 tool/source/required parameter 정보를 제공한다.
 
 ## LLM이 반환해야 하는 주요 intent
 

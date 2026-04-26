@@ -28,30 +28,37 @@ table_catalog_json_payload
 
 도메인 지식과 테이블 실행 정보를 분리하기 위한 입력 노드다.
 
-도메인에는 제품, 공정, 용어, metric 수식 같은 업무 의미를 넣고, table catalog에는 실제 조회에 필요한 dataset, tool name, required parameter, DB key, SQL, bind parameter, column 정보를 넣는다.
+도메인에는 제품, 공정, 용어, metric 수식 같은 업무 의미를 넣고, table catalog에는 실제 조회 계획과 분석에 필요한 dataset, tool name, source type, DB key, table name, required parameter, format parameter, column 정보를 넣는다.
 
-## SQL 작성 방식
+## 입력 작성 방식
 
-표준 JSON은 줄바꿈이 들어간 문자열을 그대로 지원하지 않는다. 그래서 이 프로젝트의 `Table Catalog Loader`는 SQL 전용 편의 문법을 지원한다.
+현재 table catalog에는 SQL을 저장하지 않는다. SQL은 `OracleDB Data Retriever`의 `get_production_data`, `get_target_data` 같은 tool 함수 내부에서 작성한다.
 
 권장 방식:
 
-```text
-"sql_template": """
-SELECT
-    WORK_DT,
-    OPER_NAME,
-    SUM(QTY) AS production
-FROM PROD_TABLE
-WHERE WORK_DT = :date
-  AND NVL(DELETE_FLAG, 'N') = 'N'
-  AND SITE_CODE = "K1"
-GROUP BY WORK_DT, OPER_NAME
-"""
+```json
+{
+  "datasets": {
+    "production": {
+      "display_name": "생산 데이터",
+      "tool_name": "get_production_data",
+      "source_type": "oracle",
+      "db_key": "MES",
+      "table_name": "PROD_TABLE",
+      "required_params": ["date"],
+      "format_params": ["date"],
+      "columns": [
+        {"name": "WORK_DT", "type": "date"},
+        {"name": "OPER_NAME", "type": "string"},
+        {"name": "production", "type": "number"}
+      ]
+    }
+  }
+}
 ```
 
-이렇게 쓰면 SQL 안의 작은따옴표와 큰따옴표를 대부분 그대로 둘 수 있다. Loader가 실행 전에 이 블록을 안전한 JSON 문자열로 변환한 뒤 파싱한다.
+`format_params`는 retriever 함수 내부 SQL의 `{0}`, `{1}` slot에 어떤 parameter를 순서대로 넣을지 설명하는 metadata다. 신규 입력에서는 `bind_params` 대신 `format_params`를 사용한다.
 
 ## 주의
 
-이 입력 문법은 사람이 붙여넣기 편하도록 만든 확장 JSON 형식이다. 엄밀한 `.json` 파일 검증 도구에서는 실패할 수 있지만, Langflow 노드에서는 정상적으로 처리된다.
+legacy table catalog에 `sql_template`, `query_template`, `sql`, `oracle_sql` 같은 SQL 필드가 남아 있어도 loader는 호환을 위해 파싱한 뒤 해당 필드를 제거한다. 신규 문서와 Streamlit 등록 web에서는 SQL 필드를 만들지 않는다.

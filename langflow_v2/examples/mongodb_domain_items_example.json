@@ -28,7 +28,7 @@
     "key": "production",
     "status": "active",
     "payload": {
-      "aliases": ["생산", "실적", "output", "production"],
+      "aliases": ["생산", "실적", "생산량", "output", "production"],
       "primary_quantity_column": "production",
       "default_group_by": ["OPER_NAME", "MODE"]
     },
@@ -40,7 +40,7 @@
     "key": "target",
     "status": "active",
     "payload": {
-      "aliases": ["목표", "계획", "target", "plan"],
+      "aliases": ["목표", "계획", "목표량", "target", "plan"],
       "primary_quantity_column": "target",
       "default_group_by": ["OPER_NAME", "MODE"]
     },
@@ -65,7 +65,7 @@
     "status": "active",
     "payload": {
       "display_name": "Achievement Rate",
-      "aliases": ["달성률", "목표 대비", "achievement", "achievement rate"],
+      "aliases": ["달성률", "달성율", "목표 대비", "achievement", "achievement rate"],
       "required_datasets": ["production", "target"],
       "formula": "sum(production) / sum(target) * 100",
       "output_column": "achievement_rate",

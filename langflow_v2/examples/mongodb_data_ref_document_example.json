@@ -1,0 +1,12 @@
+{
+  "ref_id": "generated_uuid_hex",
+  "session_id": "playground-session-id",
+  "path": "analysis_result.data",
+  "created_at": "2026-04-25T00:00:00+00:00",
+  "row_count": 2,
+  "columns": ["WORK_DT", "MODE", "production"],
+  "rows": [
+    {"WORK_DT": "20260422", "MODE": "DDR5", "production": 2940},
+    {"WORK_DT": "20260422", "MODE": "LPDDR5", "production": 2110}
+  ]
+}

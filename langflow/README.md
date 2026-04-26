@@ -2,7 +2,7 @@
 
 이 폴더는 제조 데이터 분석 agent를 Langflow custom component로 나누어 구현한 공간이다.
 
-현재 구현 범위는 두 가지다.
+현재 구현 범위는 세 가지다.
 
 | Folder | Purpose |
 | --- | --- |
@@ -13,7 +13,7 @@
 기본 코드 작성 이론은 아래 문서에 정리되어 있다.
 
 ```text
-docs/09_LANGFLOW_CUSTOM_NODE_CODE_GUIDE.md
+../langflow_v2/docs/03_LANGFLOW_CUSTOM_NODE_CODE_GUIDE.md
 ```
 
 ## 권장 사용 흐름
@@ -47,15 +47,20 @@ streamlit run C:\Users\qkekt\Desktop\langflow_local_manufacturing_project\langfl
 
 Main Flow는 domain id를 입력하지 않는다. `manufacturing_domain_items` 컬렉션의 active item을 모두 읽어 `domain`, `domain_index`, `domain_prompt_context`로 합친다.
 
-테이블/SQL/필수 parameter 정보는 domain과 분리해서 table catalog로 넣는다.
+테이블/컬럼/source/필수 parameter 정보는 domain과 분리해서 table catalog로 넣는다.
 
 ```text
 data_answer_flow / Table Catalog JSON Input.table_catalog_json_payload
 -> Table Catalog Loader.table_catalog_json_payload
--> Main Flow Context Builder.table_catalog_payload
+
+Table Catalog Loader.table_catalog_payload
+-> Retrieval Plan Builder.table_catalog_payload
+
+Table Catalog Loader.table_catalog_payload
+-> OracleDB Data Retriever.table_catalog_payload
 ```
 
-SQL은 사람이 읽기 쉽게 `sql_template: """..."""` 블록으로 그대로 붙여넣을 수 있다. 예시는 아래 파일에 있다.
+현재 table catalog에는 SQL을 저장하지 않는다. 실제 SQL은 `get_production_data` 같은 Oracle retriever tool 함수 내부에서 작성하고, table catalog는 dataset 선택, tool 이름, source/db key, 필수 parameter, format parameter, 컬럼 metadata를 전달한다. 예시는 아래 파일에 있다.
 
 ```text
 langflow/data_answer_flow/examples/phase1_table_catalog_input_example.txt
@@ -67,9 +72,18 @@ langflow/data_answer_flow/examples/phase1_table_catalog_input_example.txt
 00 Previous State JSON Input
 -> 01 Session State Loader
 02 MongoDB Domain Item Payload Loader
+-> 05 Main Flow Context Builder
+
 03 Table Catalog JSON Input
 -> 04 Table Catalog Loader
--> 05 Main Flow Context Builder
+
+04 Table Catalog Loader
+-> 12 Retrieval Plan Builder.table_catalog_payload
+
+04 Table Catalog Loader
+-> 14 OracleDB Data Retriever.table_catalog_payload
+
+05 Main Flow Context Builder
 -> 06 Build Intent Prompt
 -> 07 LLM API Caller
 -> 08 Parse Intent JSON
@@ -123,7 +137,7 @@ Build Answer Prompt.prompt_payload
 }
 ```
 
-`Dummy Data Retriever`와 `OracleDB Data Retriever`는 같은 tool 이름을 사용한다. Oracle 버전은 table catalog의 dataset별 `sql_template`, `db_key`, `bind_params`를 우선 사용하고, table catalog가 없을 때만 `14_oracledb_data_retriever.py` 내부 fallback SQL을 사용한다.
+`Dummy Data Retriever`와 `OracleDB Data Retriever`는 같은 tool 이름을 사용한다. Oracle 버전은 SQL을 table catalog나 LLM에서 받지 않고, `14_oracledb_data_retriever.py`의 각 `get_*` tool 함수 내부 SQL을 실행한다. Table catalog는 dataset별 `tool_name`, `source_type`, `db_key`, `table_name`, `required_params`, `format_params`, `columns` 같은 metadata를 제공한다.
 
 ## Playground 출력
 
@@ -153,7 +167,7 @@ langflow/data_answer_flow/detail_desc/
 Domain item 작성 flow:
 
 ```text
-docs/10_LANGFLOW_DOMAIN_ITEM_FLOW_GUIDE.md
+../langflow_v2/docs/02_LANGFLOW_DOMAIN_ITEM_FLOW_GUIDE.md
 ```
 
 수동 JSON fallback 예시:

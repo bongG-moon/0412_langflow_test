@@ -2,11 +2,11 @@
 
 제조 데이터 질문에 답하기 위한 Langflow main flow custom node 모음이다.
 
-현재 구조의 핵심은 세 가지다.
+현재 구조의 핵심은 네 가지다.
 
 1. `MongoDB Domain Item Payload Loader`가 `manufacturing_domain_items` 컬렉션의 active item을 domain id 없이 전부 읽어온다.
 2. `Main Flow Context Builder`가 사용자 질문, session state, domain payload를 한 번에 묶어 `main_context`로 전달한다.
-3. `Table Catalog JSON Input -> Table Catalog Loader`가 table/SQL/required parameter 정보를 domain과 분리해서 전달한다.
+3. `Table Catalog JSON Input -> Table Catalog Loader`가 table/source/column/required parameter 정보를 domain과 분리해서 후단 조회 노드로 전달한다.
 4. LLM 호출은 Langflow built-in LLM이 아니라 custom `LLM API Caller` 노드를 사용한다. 각 LLM 노드마다 API key와 model을 입력한다.
 
 ## 권장 전체 순서
@@ -15,9 +15,16 @@
 00 Previous State JSON Input
 -> 01 Session State Loader
 
-02 MongoDB Domain Item Payload Loader
 03 Table Catalog JSON Input
 -> 04 Table Catalog Loader
+
+04 Table Catalog Loader
+-> 12 Retrieval Plan Builder.table_catalog_payload
+
+04 Table Catalog Loader
+-> 14 OracleDB Data Retriever.table_catalog_payload
+
+02 MongoDB Domain Item Payload Loader
 -> 05 Main Flow Context Builder
 
 05 Main Flow Context Builder
@@ -71,9 +78,6 @@ Session State Loader.agent_state
 MongoDB Domain Item Payload Loader.domain_payload
 -> Main Flow Context Builder.domain_payload
 
-Table Catalog Loader.table_catalog_payload
--> Main Flow Context Builder.table_catalog_payload
-
 사용자 질문 입력
 -> Main Flow Context Builder.user_question
 ```
@@ -91,18 +95,14 @@ Table Catalog Loader.table_catalog_payload
     "domain_index": {},
     "domain_prompt_context": {},
     "domain_errors": [],
-    "mongo_domain_load_status": {},
-    "table_catalog_payload": {},
-    "table_catalog": {},
-    "table_catalog_prompt_context": {},
-    "table_catalog_errors": []
+    "mongo_domain_load_status": {}
   }
 }
 ```
 
 `domain_prompt_context`는 LLM prompt용 경량 요약이다. 전체 domain의 모든 컬럼과 원본 payload를 LLM에 넣지 않고, 의도 분류에 필요한 dataset, metric, alias, term 요약만 전달해서 token 사용량을 줄인다.
 
-`table_catalog_prompt_context`는 어떤 질문이 어떤 dataset 후보와 연결되는지 알려주는 LLM용 경량 요약이다. 실제 SQL, table name, db_key는 LLM prompt에 넣지 않고 `table_catalog` 실행 payload에만 둔다.
+Table catalog는 token 절감을 위해 `main_context`와 intent prompt에 넣지 않는다. 실제 데이터 조회가 필요한 후단의 `Retrieval Plan Builder`와 `OracleDB Data Retriever`에 직접 연결한다.
 
 ### 2. Intent 추출
 
@@ -261,47 +261,56 @@ Domain JSON Loader.domain_payload
 
 ## Table Catalog 입력 방식
 
-테이블/DB 조회 정보는 domain이 아니라 table catalog로 전달한다.
+테이블/source/컬럼/필수 parameter metadata는 domain이 아니라 table catalog로 전달한다.
 
 ```text
 Table Catalog JSON Input.table_catalog_json_payload
 -> Table Catalog Loader.table_catalog_json_payload
 
 Table Catalog Loader.table_catalog_payload
--> Main Flow Context Builder.table_catalog_payload
+-> Retrieval Plan Builder.table_catalog_payload
+
+Table Catalog Loader.table_catalog_payload
+-> OracleDB Data Retriever.table_catalog_payload
 ```
 
-쿼리는 `sql_template`에 block 형태로 그대로 붙여넣는 방식을 권장한다. 표준 JSON은 raw multiline string을 지원하지 않지만, `Table Catalog Loader`는 SQL 전용 편의 문법으로 `"""..."""` 블록을 먼저 변환한 뒤 파싱한다.
+현재 table catalog에는 SQL을 저장하지 않는다. `Table Catalog Loader`는 legacy 입력 호환을 위해 `sql_template`, `query_template`, `sql`, `oracle_sql` 같은 SQL 필드를 읽을 수 있지만, normalize 단계에서 제거한다. 신규 입력은 아래처럼 metadata 중심으로 작성한다.
 
-```text
+```json
 {
-  "sql_template": """
-SELECT
-    WORK_DT,
-    OPER_NAME,
-    SUM(QTY) AS production
-FROM PROD_TABLE
-WHERE WORK_DT = :date
-  AND NVL(DELETE_FLAG, 'N') = 'N'
-  AND SITE_CODE = "K1"
-GROUP BY WORK_DT, OPER_NAME
-"""
+  "datasets": {
+    "production": {
+      "display_name": "생산 데이터",
+      "description": "일자/공정/제품 조건별 생산 실적",
+      "keywords": ["생산량", "실적"],
+      "question_examples": ["오늘 생산량 알려줘"],
+      "tool_name": "get_production_data",
+      "source_type": "oracle",
+      "db_key": "MES",
+      "table_name": "PROD_TABLE",
+      "required_params": ["date"],
+      "format_params": ["date"],
+      "columns": [
+        {"name": "WORK_DT", "type": "date", "description": "작업일자 YYYYMMDD"},
+        {"name": "OPER_NAME", "type": "string", "description": "공정명"},
+        {"name": "production", "type": "number", "description": "생산수량"}
+      ]
+    }
+  }
 }
 ```
-
-이 방식이면 SQL 안에 작은따옴표(`'N'`)나 큰따옴표(`"K1"`)가 있어도 대부분 그대로 유지된다. Loader 출력의 `table_catalog.datasets[].sql_template`에는 실제 실행 가능한 멀티라인 SQL 문자열이 들어간다.
 
 어떤 질문에 어떤 데이터가 필요한지는 아래 두 정보가 함께 결정한다.
 
 - `table_catalog.datasets[].keywords`, `question_examples`: 질문 표현과 dataset 후보 연결
 - domain `metrics[].required_datasets`: 계산 metric이 요구하는 dataset 연결
 
-예를 들어 “생산 달성율”은 domain metric에서 `production`, `target`이 필요하다고 정의하고, table catalog에서 각 dataset의 `tool_name`, `required_params`, SQL을 가져온다.
+예를 들어 “생산 달성율”은 domain metric에서 `production`, `target`이 필요하다고 정의하고, table catalog에서 각 dataset의 `tool_name`, `source_type`, `db_key`, `required_params`, `format_params`, `columns`를 가져온다.
 
 예시 파일:
 
 ```text
-reference_materials/table_catalog_examples/phase1_table_catalog_input_example.txt
+langflow/data_answer_flow/examples/phase1_table_catalog_input_example.txt
 ```
 
 ## OracleDB TNS Connections JSON 예시
@@ -333,9 +342,9 @@ reference_materials/table_catalog_examples/phase1_table_catalog_input_example.tx
 }
 ```
 
-사용자 입력 설정명은 `tns`, `tns_name`, `tns_alias`, `tns_info` 중 하나를 쓴다. 내부적으로 `oracledb.connect(user=..., password=..., dsn=tns)` 형태로 연결한다.
+사용자 입력 설정명은 `dsn`, `tns`, `tns_name`, `tns_alias`, `tns_info` 중 하나를 쓴다. 내부적으로 thin mode `oracledb.connect(user=..., password=..., dsn=...)` 형태로 연결하므로 `tns_admin`, `client_lib_dir` 입력은 사용하지 않는다.
 
-Oracle SQL은 domain JSON이나 LLM 결과에서 받지 않는다. 우선 `Table Catalog Loader.table_catalog`의 dataset별 `sql_template`을 사용하고, table catalog가 비어 있을 때만 `14 OracleDB Data Retriever` 내부 fallback SQL을 사용한다.
+Oracle SQL은 domain JSON, LLM 결과, table catalog에서 받지 않는다. 각 tool 함수가 자체 SQL을 작성하고, SQL 안의 값은 `{0}`, `{1}` 같은 Python format slot으로 넣는다. `date` 값은 함수 내부에서 `2026-04-22` 또는 `20260422` 입력을 Oracle 조건에 맞는 `'20260422'` literal로 변환한다. SQL은 `SELECT`뿐 아니라 `WITH`로 시작하는 read query도 허용한다.
 
 ```text
 get_production_data

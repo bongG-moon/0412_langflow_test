@@ -13,6 +13,11 @@
         "display_name": "Die Attach",
         "aliases": ["DA", "D/A", "DA공정"],
         "processes": ["D/A1", "D/A2", "D/A3"]
+      },
+      "WB": {
+        "display_name": "Wire Bond",
+        "aliases": ["WB", "W/B", "WB공정"],
+        "processes": ["W/B1", "W/B2"]
       }
     },
     "terms": {},
@@ -27,10 +32,12 @@
     "metrics": {
       "achievement_rate": {
         "display_name": "Achievement Rate",
-        "aliases": ["달성률", "목표 대비", "achievement"],
+        "aliases": ["달성률", "달성율", "목표 대비", "achievement", "achievement rate"],
         "required_datasets": ["production", "target"],
         "formula": "sum(production) / sum(target) * 100",
-        "output_column": "achievement_rate"
+        "output_column": "achievement_rate",
+        "source_columns": ["production", "target"],
+        "grouping_hint": ["MODE", "OPER_NAME"]
       }
     },
     "join_rules": [

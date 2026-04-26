@@ -20,6 +20,7 @@ analysis_result
 - `analysis_context.analysis_table.data`를 pandas DataFrame으로 만든다.
 - intent의 filters와 filter expressions를 먼저 적용한다.
 - LLM code에 import, 파일 접근, eval, exec, OS API 같은 위험 구문이 있는지 검사한다.
+- LLM code가 실제 DataFrame에 없는 컬럼을 참조하면 실행하지 않고 fallback 분석을 시도한다.
 - 안전한 코드만 실행하고 최종 DataFrame을 row list로 반환한다.
 - LLM code가 비었거나 실패하면 간단한 fallback 분석을 시도한다.
 

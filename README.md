@@ -9,11 +9,16 @@ The remaining runnable surfaces are:
 
 - Python entrypoints in `manufacturing_agent/agent.py`
 - Streamlit UI in `app.py`
+- Standalone Langflow custom components under `langflow/`
+- Table/domain registration Streamlit UI under `langflow/registration_web/`
 - Tests under `tests/`
 - Project operating notes under `.codex/`
 
-Legacy visual-canvas component wrappers, generated standalone node files,
-import JSON, session-store artifacts, and their tests/docs have been removed.
+The Langflow surface is maintained as standalone custom components. In the
+current table catalog structure, SQL is not stored in table catalog metadata;
+Oracle SQL lives inside each retriever `get_*` tool function, while table
+catalog documents describe dataset routing, source/db keys, required params,
+format params, and columns.
 
 ## Quick Start
 
@@ -51,6 +56,10 @@ project_root/
 |   |-- domain/
 |   |-- shared/
 |   `-- app/
+|-- langflow/
+|   |-- data_answer_flow/
+|   |-- domain_item_authoring_flow/
+|   `-- registration_web/
 |-- app.py
 |-- docs/
 |-- reference_materials/

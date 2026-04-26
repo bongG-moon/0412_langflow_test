@@ -1,9 +1,11 @@
-﻿# Documentation
+# Documentation
 
-These documents describe the remaining LangGraph-based manufacturing agent,
-its Streamlit UI, and the standalone Langflow planning notes.
+이 폴더는 LangGraph 기반 제조 Agent, Streamlit UI, 공통 동작 계약을 설명합니다.
 
-Recommended reading order:
+Langflow v2 전용 문서는 `langflow_v2/docs/`로 이동했습니다.
+노드별 상세 설명은 `langflow_v2/detail_desc/`를 먼저 보면 됩니다.
+
+## Recommended Reading Order
 
 1. `00_START_HERE.md`
 2. `01_PROJECT_STRUCTURE.md`
@@ -13,22 +15,26 @@ Recommended reading order:
 6. `05_STREAMLIT_APP.md`
 7. `06_AGENT_HARNESS.md`
 8. `07_LOCAL_SKILLS.md`
-9. `08_LANGFLOW_STANDALONE_IMPLEMENTATION_PLAN.md`
-10. `09_LANGFLOW_CUSTOM_NODE_CODE_GUIDE.md`
-11. `10_LANGFLOW_DOMAIN_ITEM_FLOW_GUIDE.md`
-12. `11_ADDITIONAL_READING.md`
+9. `11_ADDITIONAL_READING.md`
 
 ## Document Map
 
-- `00_START_HERE.md`: short orientation
-- `01_PROJECT_STRUCTURE.md`: directory responsibilities
-- `02_BUILD_FLOW.md`: runtime flow and branch order
-- `03_FUNCTION_GUIDE.md`: important functions and modules
-- `04_DOMAIN_AND_USAGE_GUIDE.md`: manufacturing domain and question guidance
-- `05_STREAMLIT_APP.md`: UI execution notes
-- `06_AGENT_HARNESS.md`: behavior contract for other tool surfaces
-- `07_LOCAL_SKILLS.md`: local Codex skill notes
-- `08_LANGFLOW_STANDALONE_IMPLEMENTATION_PLAN.md`: standalone Langflow phase 1 implementation plan
-- `09_LANGFLOW_CUSTOM_NODE_CODE_GUIDE.md`: beginner-friendly Langflow custom node coding guide
-- `10_LANGFLOW_DOMAIN_ITEM_FLOW_GUIDE.md`: detailed guide for the item-based domain authoring flow and MongoDB handoff to the main flow
-- `11_ADDITIONAL_READING.md`: suggested next reads by task
+- `00_START_HERE.md`: 프로젝트를 처음 볼 때 읽는 짧은 안내
+- `01_PROJECT_STRUCTURE.md`: 폴더별 책임
+- `02_BUILD_FLOW.md`: LangGraph 기준 실행 흐름과 분기 순서
+- `03_FUNCTION_GUIDE.md`: 중요한 함수와 모듈 위치
+- `04_DOMAIN_AND_USAGE_GUIDE.md`: 제조 도메인 규칙과 질문 작성 가이드
+- `05_STREAMLIT_APP.md`: Streamlit 실행과 UI 흐름
+- `06_AGENT_HARNESS.md`: 다른 실행 표면에서도 지켜야 할 동작 계약
+- `07_LOCAL_SKILLS.md`: 로컬 Codex skill 설명
+- `11_ADDITIONAL_READING.md`: 작업 목적별 추가 읽기 경로
+
+## Langflow Documents
+
+Langflow 관련 문서는 v2 구현과 함께 관리합니다.
+
+- `../langflow_v2/README.md`: v2 canvas 연결 지도와 전체 흐름
+- `../langflow_v2/detail_desc/`: v2 노드별 상세 설명
+- `../langflow_v2/docs/01_LANGFLOW_STANDALONE_IMPLEMENTATION_PLAN.md`: standalone 구현 계획
+- `../langflow_v2/docs/02_LANGFLOW_DOMAIN_ITEM_FLOW_GUIDE.md`: item document 기반 domain 관리 flow 가이드
+- `../langflow_v2/docs/03_LANGFLOW_CUSTOM_NODE_CODE_GUIDE.md`: Custom Component 코드 작성 가이드

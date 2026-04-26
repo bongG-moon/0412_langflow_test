@@ -23,7 +23,7 @@ TABLE_CATALOG_ITEMS_COLLECTION = os.getenv(
     "MONGO_TABLE_CATALOG_ITEMS_COLLECTION",
     "manufacturing_table_catalog_items",
 )
-LLM_API_KEY = os.getenv("LLM_API_KEY", "AIzaSyB665JByCm6OiOpgsvoRyZLS5mZNebeu1U")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "aaaaaa")
 LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.0"))
 

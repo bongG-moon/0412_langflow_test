@@ -48,9 +48,10 @@ Build Pandas Analysis Prompt.prompt_payload
 - 사용자 intent의 metric hint
 - metric이 요구하는 required dataset
 - 현재 dataframe profile
+- 실제 조회 결과에서 확인된 allowed dataframe columns
 - sample rows
 
-즉 pandas 코드 생성에 필요한 column, formula, metric 정보만 전달해 token 사용량을 줄인다.
+즉 pandas 코드 생성에 필요한 실제 column, formula, metric 정보만 전달해 token 사용량을 줄인다. Domain이나 table catalog에 적힌 column보다 조회 결과 DataFrame의 column list가 우선이며, prompt에는 이 목록을 authoritative source로 안내한다.
 
 ## LLM 응답 형식
 
@@ -73,3 +74,5 @@ LLM은 JSON만 반환해야 한다.
 ```
 
 뒤 노드인 `Parse Pandas Analysis JSON`이 이 JSON을 검증하고, `Execute Pandas Analysis`가 안전성 검사를 거쳐 실행한다.
+
+LLM이 실제 DataFrame에 없는 컬럼을 써야 하는 상황이면 code를 비워 두고 `warnings`에 누락 컬럼을 설명하도록 유도한다.

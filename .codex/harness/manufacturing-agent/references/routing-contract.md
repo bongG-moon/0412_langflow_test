@@ -28,6 +28,11 @@ Typical meaning:
 - `single_retrieval`: one dataset or one retrieval path is enough
 - `multi_retrieval`: multiple datasets or multiple retrieval passes are required
 
+Metric domain rules participate in retrieval planning. If a matched metric has
+`required_datasets`, those dataset keys must be merged into the retrieval plan
+before choosing `single_retrieval` vs `multi_retrieval`, even when the LLM
+initially returns only one dataset.
+
 ## Route 3: post-processing
 
 After retrieval, branch into:

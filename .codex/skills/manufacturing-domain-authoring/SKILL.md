@@ -22,6 +22,10 @@ Use this skill for domain registration and domain-rule edits.
    - retrieval planning
    - analysis planning
 5. Validate with a before/after question pair.
+6. For metric rules, ensure aliases cover common spelling variants and that
+   `required_datasets` contains every dataset needed by the formula. Matched
+   metric `required_datasets` must expand the retrieval plan before branch
+   selection.
 
 ## Use This For
 
