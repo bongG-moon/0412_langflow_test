@@ -132,7 +132,7 @@ Message History 출력
 
 ### 초보자 포인트
 
-이 노드는 "기억을 만드는 노드"가 아니라 "이전 기억을 찾는 노드"입니다. 저장은 마지막 `25 State Memory Message Builder`와 Langflow Message History Store가 담당합니다.
+이 노드는 "기억을 만드는 노드"가 아니라 "이전 기억을 찾는 노드"입니다. 저장은 마지막 `26 State Memory Message Builder`와 Langflow Message History Store가 담당합니다.
 
 ## 함수 코드 단위 해석: `extract_previous_state`
 

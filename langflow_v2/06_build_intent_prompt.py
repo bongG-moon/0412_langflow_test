@@ -82,13 +82,14 @@ def build_intent_prompt(state_payload: Any, domain_payload: Any, table_catalog_p
     current = state.get("current_data") if isinstance(state.get("current_data"), dict) else {}
     datasets = table_catalog.get("datasets") if isinstance(table_catalog.get("datasets"), dict) else {}
     filter_defs = main_flow_filters.get("filters") if isinstance(main_flow_filters.get("filters"), dict) else {}
+    required_param_defs = main_flow_filters.get("required_params") if isinstance(main_flow_filters.get("required_params"), dict) else {}
     prompt = f"""You are the intent planner for a manufacturing data-analysis Langflow.
 Return JSON only.
 
 Decide:
 - query_mode: retrieval or followup_transform
 - needed_datasets for retrieval
-- required_params such as date as YYYYMMDD
+- required_params using required parameter definitions, such as date as YYYYMMDD
 - filters using standard semantic keys from main_flow_filters
 - column_filters for explicit data columns that are not defined in main_flow_filters
 - needs_pandas
@@ -187,6 +188,9 @@ Table catalog:
 
 Main flow filters:
 {json.dumps(filter_defs, ensure_ascii=False, default=str, indent=2)}
+
+Required parameter definitions:
+{json.dumps(required_param_defs, ensure_ascii=False, default=str, indent=2)}
 
 Domain/metric hints:
 {json.dumps(domain, ensure_ascii=False, default=str, indent=2)}

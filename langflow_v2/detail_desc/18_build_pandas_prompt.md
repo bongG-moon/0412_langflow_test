@@ -1,57 +1,61 @@
-﻿# 18. Build Pandas Prompt
+# 18. Build Pandas Prompt
 
-## ??以???븷
+## 이 노드 역할
 
-議고쉶???곗씠?곗? domain ?뺣낫瑜?諛뷀깢?쇰줈 pandas 肄붾뱶 ?앹꽦???꾪븳 prompt瑜?留뚮뱶???몃뱶?낅땲??
+조회된 데이터와 domain 정보를 바탕으로 pandas 분석 코드를 생성할 LLM prompt를 만드는 노드입니다.
 
-## ???꾩슂?쒓?
+이 노드는 코드를 실행하지 않습니다. "어떤 pandas 코드를 만들면 되는지"를 LLM에게 잘 설명하는 prompt payload만 구성합니다.
 
-LLM?먭쾶 洹몃깷 "遺꾩꽍?댁쨾"?쇨퀬 ?섎㈃ 而щ읆紐낆쓣 ?섎せ ?곌굅??遺덊븘?뷀븳 肄붾뱶瑜?留뚮뱾 ???덉뒿?덈떎.
-???몃뱶???ㅼ젣 議고쉶??而щ읆怨?row ?덉떆, metric 怨듭떇, grouping hint瑜?prompt???ｌ뼱 pandas 怨꾪쉷?????뺥솗?섍쾶 留뚮벊?덈떎.
+## 왜 필요한가
 
-## ?낅젰
+LLM에게 단순히 "분석해줘"라고만 전달하면 실제 컬럼명, 예시 row, metric 공식, 데이터셋 관계를 모른 채 코드를 만들 수 있습니다.
 
-| ?낅젰 ?ы듃 | ?섎? |
+이 노드는 실제 조회 결과의 컬럼과 샘플 row, domain에 정의된 metric/formula를 prompt에 넣어 LLM이 실행 가능한 pandas 코드를 만들 확률을 높입니다.
+
+## 입력
+
+| 입력 포트 | 설명 |
 | --- | --- |
-| `retrieval_payload` | pandas 遺꾩꽍???꾩슂??議고쉶 寃곌낵?낅땲?? |
-| `domain_payload` | metric 怨듭떇, grouping hint ??遺꾩꽍???꾩슂??domain ?뺣낫?낅땲?? |
+| `retrieval_payload` | pandas 분석이 필요한 조회 결과입니다. |
+| `domain_payload` | metric 공식, 분석 규칙, dataset 설명 등이 들어 있는 domain 정보입니다. |
 
-## 異쒕젰
+## 출력
 
-| 異쒕젰 ?ы듃 | ?섎? |
+| 출력 포트 | 설명 |
 | --- | --- |
-| `prompt_payload` | `LLM JSON Caller (Pandas)`???섍만 prompt?낅땲?? |
+| `prompt_payload` | `LLM JSON Caller`에 전달할 pandas 코드 생성 prompt입니다. |
 
-## 二쇱슂 ?⑥닔 ?ㅻ챸
+## 주요 함수 설명
 
-- `_source_results`: retrieval payload?먯꽌 source result 紐⑸줉??爰쇰깄?덈떎.
-- `_merge_sources`: ?щ윭 dataset row瑜?遺꾩꽍?⑹쑝濡??⑹튌 以鍮꾨? ?⑸땲??
-- `_domain_prompt`: domain metric怨?alias ?뺣낫瑜?吏㏃? ?ㅻ챸?쇰줈 留뚮벊?덈떎.
-- `_build_prompt`: LLM?먭쾶 以?pandas 肄붾뱶 ?묒꽦 吏?쒕Ц??留뚮벊?덈떎.
-- `build_pandas_prompt`: ?꾩껜 怨쇱젙???ㅽ뻾?⑸땲??
+| 함수 | 역할 |
+| --- | --- |
+| `_merge_sources` | 여러 source result를 pandas 분석용 하나의 table로 병합합니다. |
+| `_domain_prompt` | domain 정보를 LLM이 읽기 쉬운 설명 문장으로 바꿉니다. |
+| `_build_prompt` | columns, sample rows, intent plan, domain hint를 포함한 prompt 문자열을 만듭니다. |
+| `build_pandas_prompt` | 전체 prompt payload를 구성합니다. |
 
-## 珥덈낫???ъ씤??
-???몃뱶??pandas 肄붾뱶瑜??ㅽ뻾?섏? ?딆뒿?덈떎.
-肄붾뱶瑜?留뚮뱾湲??꾪븳 prompt留??묒꽦?⑸땲??
+## 초보자 확인용
 
-?ㅼ젣 LLM ?몄텧? ?ㅼ쓬??`LLM JSON Caller (Pandas)`媛 ?섍퀬, ?ㅽ뻾? `Pandas Analysis Executor`媛 ?⑸땲??
+이 노드는 pandas를 실행하지 않습니다. 다음 노드인 `LLM JSON Caller`가 이 prompt를 보고 pandas 코드를 만들고, 실제 실행은 `Pandas Analysis Executor`에서 합니다.
 
-## ?곌껐
+여러 데이터셋이 조회된 경우 `_merge_sources`가 공통 컬럼을 기준으로 분석용 table을 준비합니다.
+
+## 연결
 
 ```text
 Retrieval Postprocess Router.post_analysis
 -> Build Pandas Prompt.retrieval_payload
 
-Domain Loader.domain_payload
+MongoDB Domain Loader.domain_payload
 -> Build Pandas Prompt.domain_payload
 
 Build Pandas Prompt.prompt_payload
--> LLM JSON Caller (Pandas).prompt_payload
+-> LLM JSON Caller.prompt_payload
 ```
 
-## Python 肄붾뱶 ?곸꽭 ?댁꽍
+## Python 코드 상세 해석
 
-### ?낅젰 ?덉떆
+### 입력 예시
 
 ```json
 {
@@ -63,11 +67,8 @@ Build Pandas Prompt.prompt_payload
     "source_results": [
       {
         "dataset_key": "production",
-        "data": [{"MODE": "A", "production": 100}]
-      },
-      {
-        "dataset_key": "wip",
-        "data": [{"MODE": "A", "wip_qty": 50}]
+        "success": true,
+        "data": [{"MODE": "DDR5", "production": 100, "target": 120}]
       }
     ]
   },
@@ -75,7 +76,7 @@ Build Pandas Prompt.prompt_payload
     "domain": {
       "metrics": {
         "achievement_rate": {
-          "formula": "sum(production) / sum(wip_qty) * 100"
+          "formula": "production / target * 100"
         }
       }
     }
@@ -83,188 +84,106 @@ Build Pandas Prompt.prompt_payload
 }
 ```
 
-### 異쒕젰 ?덉떆
+### 출력 예시
 
 ```json
 {
   "prompt_payload": {
-    "prompt": "Write pandas code that creates result_df...",
-    "retrieval_payload": {"source_results": []},
+    "prompt": "You are writing pandas code...",
+    "rows": [
+      {"MODE": "DDR5", "production": 100, "target": 120}
+    ],
+    "columns": ["MODE", "production", "target"],
     "plan": {
       "group_by": ["MODE"],
       "metrics": ["achievement_rate"]
-    },
-    "rows": [
-      {"MODE": "A", "production": 100, "wip_qty": 50}
-    ],
-    "columns": ["MODE", "production", "wip_qty"]
-  }
-}
-```
-
-### ?듭떖 ?⑥닔蹂??댁꽍
-
-| ?⑥닔 | ?낅젰 ?덉떆 | 異쒕젰 ?덉떆 | ????肄붾뱶媛 ?꾩슂?쒓? |
-| --- | --- | --- | --- |
-| `_pd` | ?놁쓬 | pandas module | pandas媛 ?ㅼ튂?섏뼱 ?덈뒗吏 ?뺤씤?섍퀬 ?꾩슂????import?⑸땲?? |
-| `_source_results` | retrieval payload | source result list | 議고쉶 寃곌낵 諛곗뿴留?爰쇰깄?덈떎. |
-| `_merge_sources` | production rows + wip rows | ?⑹퀜吏?rows/columns | ?щ윭 dataset 寃곌낵瑜?pandas媛 ?ㅻ０ ?섎굹??row 紐⑸줉?쇰줈 以鍮꾪빀?덈떎. |
-| `_domain_from_payload` | domain payload | domain dict | formula, metric ?ㅻ챸??prompt???ｊ린 ?꾪빐 爰쇰깄?덈떎. |
-| `_domain_prompt` | domain dict | 吏㏃? ?꾨찓???ㅻ챸 臾몄옄??| LLM??而щ읆 ?섎?? metric 怨꾩궛?앹쓣 李멸퀬?섎룄濡??щ엺???쎈뒗 臾몄옣?쇰줈 諛붽퓠?덈떎. |
-| `_build_prompt` | plan, rows, columns, domain | pandas code ?묒꽦 prompt | LLM?먭쾶 `result_df`瑜?留뚮뱾?쇰뒗 援ъ껜??吏?쒕? ?묒꽦?⑸땲?? |
-| `build_pandas_prompt` | retrieval payload, domain | prompt payload | pandas LLM ?몄텧???꾩슂??紐⑤뱺 ?щ즺瑜??섎굹濡?臾띠뒿?덈떎. |
-| `build_prompt` | Langflow input | `Data(data=prompt_payload)` | Langflow output method?낅땲?? |
-
-### 肄붾뱶 ?먮쫫
-
-```text
-retrieval_payload?먯꽌 source_results 異붿텧
--> ?щ윭 source rows瑜?遺꾩꽍??rows濡?蹂묓빀
--> domain metric/formula ?ㅻ챸 ?앹꽦
--> LLM??pandas code瑜?諛섑솚?섎룄濡?prompt ?묒꽦
-```
-
-### 珥덈낫???ъ씤??
-???몃뱶??pandas瑜??ㅽ뻾?섏? ?딆뒿?덈떎. "?대뼡 pandas 肄붾뱶瑜?留뚮뱾硫?醫뗭쓣吏" LLM?먭쾶 ?붿껌?섎뒗 prompt留?留뚮벊?덈떎.
-
-## ?⑥닔 肄붾뱶 ?⑥쐞 ?댁꽍: `_merge_sources`
-
-???⑥닔???щ윭 dataset?먯꽌 議고쉶??rows瑜?pandas媛 遺꾩꽍???섎굹??table ?뺥깭濡?以鍮꾪빀?덈떎.
-
-### ?⑥닔 input
-
-```json
-[
-  {
-    "dataset_key": "production",
-    "data": [{"MODE": "A", "production": 100}]
-  },
-  {
-    "dataset_key": "wip",
-    "data": [{"MODE": "A", "wip_qty": 50}]
-  }
-]
-```
-
-### ?⑥닔 output
-
-```json
-{
-  "success": true,
-  "data": [
-    {"MODE": "A", "production": 100, "wip_qty": 50}
-  ],
-  "columns": ["MODE", "production", "wip_qty"]
-}
-```
-
-### ?듭떖 肄붾뱶 ?댁꽍
-
-```python
-frames = []
-for source in source_results:
-    rows = source.get("data") if isinstance(source.get("data"), list) else []
-```
-
-媛?source result?먯꽌 row list瑜?爰쇰깄?덈떎.
-
-```python
-frame = pd.DataFrame(rows)
-frames.append(frame)
-```
-
-rows瑜?pandas DataFrame?쇰줈 諛붽씀怨?`frames`??紐⑥쓭?덈떎.
-
-```python
-if len(frames) == 1:
-    merged = frames[0]
-```
-
-source媛 ?섎굹肉먯씠硫?join???꾩슂 ?놁씠 洹몃?濡??ъ슜?⑸땲??
-
-```python
-else:
-    merged = ...
-```
-
-source媛 ?щ윭 媛쒖씠硫?怨듯넻 而щ읆??湲곗??쇰줈 蹂묓빀?⑸땲?? ?덈? ?ㅼ뼱 production怨?wip 紐⑤몢 `MODE`媛 ?덉쑝硫?`MODE` 湲곗??쇰줈 ?⑹퀜吏묐땲??
-
-```python
-return {"success": True, "data": merged.to_dict(orient="records"), "columns": list(merged.columns)}
-```
-
-理쒖쥌 DataFrame???ㅼ떆 list[dict]濡?諛붽퓭 prompt payload???ｌ뒿?덈떎.
-
-## 異붽? ?⑥닔 肄붾뱶 ?⑥쐞 ?댁꽍: `_build_prompt`
-
-???⑥닔??Pandas LLM???쎌쓣 ?ㅼ젣 prompt 臾몄옄?댁쓣 留뚮벊?덈떎.
-
-### ?⑥닔 input
-
-```json
-{
-  "plan": {
-    "group_by": ["MODE"],
-    "metrics": ["achievement_rate"],
-    "analysis_goal": "mode蹂??앹궛?ъ꽦瑜?怨꾩궛"
-  },
-  "rows": [
-    {"MODE": "A", "production": 100, "wip_qty": 50}
-  ],
-  "columns": ["MODE", "production", "wip_qty"],
-  "domain": {
-    "metrics": {
-      "achievement_rate": {
-        "formula": "sum(production) / sum(wip_qty) * 100"
-      }
     }
   }
 }
 ```
 
-### ?⑥닔 output
+### 핵심 함수별 해석
+
+| 함수 | 입력 예시 | 출력 예시 | 설명 |
+| --- | --- | --- | --- |
+| `_merge_sources` | source result list | rows, columns, merge_notes | pandas 분석에 쓸 단일 table을 준비합니다. |
+| `_domain_prompt` | domain dict | 설명 문자열 | metric과 규칙을 prompt에 넣기 쉬운 문장으로 만듭니다. |
+| `_build_prompt` | plan, rows, columns | prompt string | LLM에게 코드 작성 규칙을 전달합니다. |
+| `build_pandas_prompt` | retrieval/domain payload | prompt payload | LLM 호출에 필요한 정보를 하나로 묶습니다. |
+
+### 코드 흐름
 
 ```text
-You are writing pandas code...
-Available columns: MODE, production, wip_qty
-Return JSON only...
+retrieval_payload 입력
+-> source_results 추출
+-> 분석용 rows/columns 준비
+-> domain metric/formula 설명 생성
+-> pandas code 생성 prompt 작성
+-> prompt_payload 출력
 ```
 
-### ?듭떖 肄붾뱶 ?댁꽍
+## 함수 코드 단위 해석: `_merge_sources`
+
+### 함수 input
+
+```json
+[
+  {
+    "dataset_key": "production",
+    "success": true,
+    "data": [{"WORK_DT": "20260426", "MODE": "DDR5", "production": 100}]
+  },
+  {
+    "dataset_key": "target",
+    "success": true,
+    "data": [{"WORK_DT": "20260426", "MODE": "DDR5", "target": 120}]
+  }
+]
+```
+
+### 함수 output
+
+```json
+{
+  "success": true,
+  "data": [
+    {"WORK_DT": "20260426", "MODE": "DDR5", "production": 100, "target": 120}
+  ],
+  "columns": ["WORK_DT", "MODE", "production", "target"]
+}
+```
+
+### 핵심 코드 해석
 
 ```python
-preview_rows = rows[:20]
+valid = [item for item in source_results if item.get("success") and isinstance(item.get("data"), list)]
 ```
 
-LLM prompt???꾩껜 rows瑜????ｌ? ?딄퀬 ???쇰?留??ｌ뒿?덈떎. ?곗씠?곌? 留롮쓣?섎줉 token??而ㅼ?湲??뚮Ц?낅땲??
+성공했고 row list를 가진 source만 병합 대상으로 사용합니다.
 
 ```python
-domain_text = _domain_prompt(domain)
+if len(valid) == 1:
+    rows = deepcopy(valid[0].get("data", []))
+    return {"success": True, "data": rows, "columns": _rows_columns(rows), ...}
 ```
 
-domain???ㅼ뼱 ?덈뒗 metric formula??column ?섎?瑜??щ엺???쎈뒗 ?ㅻ챸?쇰줈 諛붽퓠?덈떎.
+source가 하나뿐이면 별도 merge 없이 그대로 분석 table로 사용합니다.
 
 ```python
-prompt = f"""..."""
+shared = set(str(column) for column in merged.columns) & set(str(column) for column in right.columns)
+join_columns = [column for column in PREFERRED_JOIN_COLUMNS if column in shared] or sorted(shared)[:3]
 ```
 
-LLM?먭쾶 ?ㅼ쓬 議곌굔??吏?쒗빀?덈떎.
-
-- pandas DataFrame ?대쫫? `df`瑜??ъ슜??寃?- 理쒖쥌 寃곌낵??諛섎뱶??`result` 蹂?섏뿉 ?댁쓣 寃?- import???뚯씪 ?묎렐 媛숈? 肄붾뱶???곗? 留?寃?- JSON?쇰줈 `code`, `explanation`, `warnings`瑜?諛섑솚??寃?
-```python
-Available columns:
-{json.dumps(columns, ensure_ascii=False)}
-```
-
-LLM???녿뒗 而щ읆紐낆쓣 吏?대궡吏 ?딅룄濡??ㅼ젣 ?ъ슜 媛?ν븳 而щ읆 紐⑸줉???ｌ뒿?덈떎.
+source가 여러 개라면 공통 컬럼을 찾고, 날짜/공정/제품처럼 선호되는 join key를 우선 사용합니다.
 
 ```python
-Sample rows:
-{json.dumps(preview_rows, ensure_ascii=False, indent=2)}
+merged = merged.merge(right, how="inner", on=join_columns, suffixes=("", f"_{right_name}"))
 ```
 
-LLM???곗씠???뺥깭瑜??댄빐?섎룄濡??쇰? row ?덉떆瑜??ｌ뒿?덈떎.
+공통 key를 기준으로 DataFrame을 병합합니다.
 
-### ?????⑥닔媛 以묒슂?쒓??
+```python
+return {"success": True, "data": rows, "columns": [str(column) for column in merged.columns], "merge_notes": notes}
+```
 
-Pandas code ?덉쭏? prompt媛 醫뚯슦?⑸땲?? ???⑥닔媛 而щ읆, ?덉떆 row, domain formula瑜????ｌ뼱以섏빞 LLM???ㅽ뻾 媛?ν븳 pandas 肄붾뱶瑜?留뚮뱾 媛?μ꽦???믪븘吏묐땲??
+병합 결과를 다시 list[dict] 형태로 바꿔 prompt payload에 넣습니다.

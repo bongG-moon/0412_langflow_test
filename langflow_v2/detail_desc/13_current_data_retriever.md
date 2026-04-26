@@ -1,47 +1,43 @@
-﻿# 13. Current Data Retriever
+# 13. Current Data Retriever
 
-## ??以???븷
+## 이 노드 역할
 
-?꾩냽 吏덈Ц?먯꽌 ?댁쟾 寃곌낵??`state.current_data`瑜???議고쉶 寃곌낵泥섎읆 ?ㅼ떆 爰쇰궡???몃뱶?낅땲??
+이전 턴의 `state.current_data`를 새 조회 없이 재사용해서 `retrieval_payload` 형태로 감싸는 노드입니다.
 
-## ?몄젣 ?곕굹?
+## 왜 필요한가
 
-泥?吏덈Ц:
+사용자가 "그 결과를 mode별로 정리해줘", "이때 가장 생산량이 많은 mode는?"처럼 이전 결과를 이어서 분석할 수 있습니다.
 
-```text
-?ㅻ뒛 DA怨듭젙 ?앹궛???뚮젮以?```
+이 경우 Oracle이나 dummy retriever로 새 조회를 하면 안 됩니다. 이미 있는 current data를 pandas 분석 단계로 넘겨야 합니다. 이 노드가 그 변환을 담당합니다.
 
-?꾩냽 吏덈Ц:
+## 입력
 
-```text
-?대븣 媛???앹궛?됱씠 留롮븯??MODE ?뚮젮以?```
-
-??踰덉㎏ 吏덈Ц? DB瑜??덈줈 議고쉶???꾩슂媛 ?놁뒿?덈떎.
-?댁쟾 寃곌낵瑜?pandas濡??ㅼ떆 遺꾩꽍?섎㈃ ?⑸땲??
-
-## ?낅젰
-
-| ?낅젰 ?ы듃 | ?섎? |
+| 입력 포트 | 의미 |
 | --- | --- |
-| `intent_plan` | `Intent Route Router.followup_transform` 異쒕젰?낅땲?? |
+| `intent_plan` | `Intent Route Router.followup_transform` 출력입니다. |
 
-## 異쒕젰
+## 출력
 
-| 異쒕젰 ?ы듃 | ?섎? |
+| 출력 포트 | 의미 |
 | --- | --- |
-| `retrieval_payload` | ?댁쟾 current_data瑜?source_results泥섎읆 媛먯떬 payload?낅땲?? |
+| `retrieval_payload` | current_data를 source_result처럼 감싼 payload입니다. |
 
-## 二쇱슂 ?⑥닔 ?ㅻ챸
+## 주요 함수 설명
 
-- `_source_result_from_current_data`: current_data瑜?source_result ?뺥깭濡?諛붽퓠?덈떎.
-- `_build_current_datasets`: ?꾩옱 ?곗씠?곗쓽 dataset ?붿빟??留뚮벊?덈떎.
-- `retrieve_current_data`: ?꾩냽 遺꾩꽍???꾩슂??retrieval_payload瑜?留뚮벊?덈떎.
+- `_payload_from_value`: Langflow 입력에서 dict를 꺼냅니다.
+- `_rows_columns`: row list에서 컬럼명을 추출합니다.
+- `_build_current_datasets`: source_results를 dataset별 current dataset 구조로 바꿉니다.
+- `_source_result_from_current_data`: current_data 하나를 source_result 형태로 변환합니다.
+- `retrieve_current_data`: follow-up intent plan에서 current data retrieval payload를 만듭니다.
+- `build_payload`: Langflow output method입니다.
 
-## 珥덈낫???ъ씤??
-?대쫫? Retriever吏留?DB 議고쉶瑜??섏? ?딆뒿?덈떎.
-?대? 媛吏怨??덈뒗 ?곗씠?곕? "議고쉶 寃곌낵泥섎읆" ?ъ옣?댁꽌 ???몃뱶?ㅼ씠 媛숈? 諛⑹떇?쇰줈 泥섎━?섍쾶 留뚮벊?덈떎.
+## 초보자 확인용
 
-## ?곌껐
+이 노드는 DB를 조회하지 않습니다. 이전 결과를 "조회 결과처럼 보이게" 포장하는 노드입니다.
+
+`current_data`가 없으면 source_results가 빈 상태로 반환됩니다. 그래서 후속 질문이 제대로 동작하려면 `25 Final Answer Builder`가 이전 턴에서 `next_state.current_data`를 잘 저장해야 합니다.
+
+## 연결
 
 ```text
 Intent Route Router.followup_transform
@@ -51,140 +47,107 @@ Current Data Retriever.retrieval_payload
 -> Retrieval Payload Merger.followup_retrieval
 ```
 
-## Python 肄붾뱶 ?곸꽭 ?댁꽍
+## Python 코드 상세 해석
 
-### ?낅젰 ?덉떆
+### 입력 예시
 
 ```json
 {
   "intent_plan": {
     "route": "followup_transform",
+    "query_mode": "followup_transform",
+    "group_by": ["MODE"],
     "state": {
       "current_data": {
-        "rows": [
-          {"MODE": "A", "production": 10},
-          {"MODE": "B", "production": 20}
+        "data": [
+          {"MODE": "DDR5", "production": 2940},
+          {"MODE": "HBM3", "production": 1800}
         ],
-        "summary": "previous production result"
+        "source_dataset_keys": ["production"],
+        "source_required_params": {"date": "20260425"},
+        "source_filters": {"process_name": ["D/A1"]}
       }
     }
   }
 }
 ```
 
-### 異쒕젰 ?덉떆
+### 출력 예시
 
 ```json
 {
   "retrieval_payload": {
-    "success": true,
-    "query_mode": "followup_transform",
+    "route": "followup_transform",
     "source_results": [
       {
         "success": true,
-        "dataset_key": "current_data",
         "tool_name": "current_data",
+        "dataset_key": "production",
         "data": [
-          {"MODE": "A", "production": 10},
-          {"MODE": "B", "production": 20}
-        ]
+          {"MODE": "DDR5", "production": 2940}
+        ],
+        "reused_current_data": true
       }
     ],
-    "current_data": {
-      "rows": [
-        {"MODE": "A", "production": 10},
-        {"MODE": "B", "production": 20}
-      ]
+    "current_datasets": {
+      "production": {
+        "row_count": 2,
+        "columns": ["MODE", "production"]
+      }
     }
   }
 }
 ```
 
-### ?듭떖 ?⑥닔蹂??댁꽍
+### 핵심 함수별 해석
 
-| ?⑥닔 | ?낅젰 ?덉떆 | 異쒕젰 ?덉떆 | ????肄붾뱶媛 ?꾩슂?쒓? |
+| 함수 | 입력 예시 | 출력 예시 | 왜 필요한가 |
 | --- | --- | --- | --- |
-| `_rows_columns` | `[{"MODE": "A", "production": 10}]` | `["MODE", "production"]` | ?꾩옱 ?곗씠?곗쓽 而щ읆 ?뺣낫瑜??붿빟?⑸땲?? |
-| `_build_current_datasets` | source_results | `{"current_data": {"rows": [...]}}` | ?꾩냽 吏덈Ц?먯꽌??current_data 援ъ“瑜??좎??⑸땲?? |
-| `_source_result_from_current_data` | state.current_data | source result | ?댁쟾 寃곌낵瑜?retriever媛 議고쉶??寃껋쿂??媛숈? schema濡?媛먯뙃?덈떎. |
-| `retrieve_current_data` | intent plan | retrieval payload | ?꾩냽 吏덈Ц branch?먯꽌 ?댁쟾 ?곗씠?곕? ?ㅼ떆 遺꾩꽍 媛?ν븳 payload濡?留뚮벊?덈떎. |
-| `build_payload` | Langflow input | `Data(data=retrieval_payload)` | Langflow output method?낅땲?? |
+| `_rows_columns` | `[{"MODE": "DDR5"}]` | `["MODE"]` | current data의 컬럼 요약을 만들기 위해 사용합니다. |
+| `_build_current_datasets` | source_results | dataset별 요약 | pandas prompt가 dataset별 schema를 볼 수 있게 합니다. |
+| `_source_result_from_current_data` | `current_data` | source result | 기존 데이터를 조회 결과와 같은 형태로 맞춥니다. |
+| `retrieve_current_data` | follow-up intent plan | retrieval payload | 후속 분석용 retrieval payload를 만듭니다. |
+| `build_payload` | Langflow 입력값 | `Data(data=retrieval_payload)` | Langflow output method입니다. |
 
-### 肄붾뱶 ?먮쫫
+### 코드 흐름
 
 ```text
-intent_plan.state.current_data ?뺤씤
--> rows ?먮뒗 datasets?먯꽌 湲곗〈 ?곗씠??異붿텧
--> source_results ?뺤떇?쇰줈 蹂??-> Retrieval Payload Merger???꾨떖
+followup_transform branch 입력
+-> skipped이면 빈 retrieval_payload 반환
+-> state.current_data 확인
+-> current_data를 source_result로 변환
+-> current_datasets 요약 생성
+-> Retrieval Payload Merger로 전달
 ```
 
-### 珥덈낫???ъ씤??
-???몃뱶??DB瑜??덈줈 議고쉶?섏? ?딆뒿?덈떎. "?대븣", "??寃곌낵" 媛숈? ?꾩냽 吏덈Ц?먯꽌 ?댁쟾 寃곌낵瑜??ㅼ떆 議고쉶 寃곌낵泥섎읆 ?ъ옣???ㅼ쓬 遺꾩꽍 ?④퀎濡??섍퉩?덈떎.
+## 함수 코드 단위 해석: `retrieve_current_data`
 
-## ?⑥닔 肄붾뱶 ?⑥쐞 ?댁꽍: `retrieve_current_data`
-
-???⑥닔??state ?덉쓽 `current_data`瑜?議고쉶 寃곌낵泥섎읆 諛붽퓭 以띾땲??
-
-### ?⑥닔 input
-
-```json
-{
-  "intent_plan": {
-    "route": "followup_transform",
-    "state": {
-      "current_data": {
-        "data": [
-          {"MODE": "A", "production": 10}
-        ],
-        "summary": "previous result"
-      }
-    }
-  }
-}
-```
-
-### ?⑥닔 output
-
-```json
-{
-  "retrieval_payload": {
-    "route": "followup_transform",
-    "source_results": [
-      {
-        "dataset_key": "current_data",
-        "data": [
-          {"MODE": "A", "production": 10}
-        ]
-      }
-    ]
-  }
-}
-```
-
-### ?듭떖 肄붾뱶 ?댁꽍
+### 핵심 코드 해석
 
 ```python
 payload = _payload_from_value(intent_plan_value)
 plan = payload.get("intent_plan") if isinstance(payload.get("intent_plan"), dict) else payload
+state = payload.get("state") if isinstance(payload.get("state"), dict) else {}
 ```
 
-router?먯꽌 ?섏뼱??媛믪쓣 dict濡?諛붽씀怨??ㅼ젣 intent plan??爰쇰깄?덈떎.
+Router에서 넘어온 payload에서 intent plan과 state를 꺼냅니다.
 
 ```python
-state = payload.get("state") if isinstance(payload.get("state"), dict) else plan.get("state", {})
+if payload.get("skipped"):
+    return {"retrieval_payload": {"skipped": True, ...}}
+```
+
+선택되지 않은 branch라면 아무 작업도 하지 않고 skipped payload를 반환합니다.
+
+```python
 current_data = state.get("current_data") if isinstance(state.get("current_data"), dict) else {}
-```
-
-?꾩냽 遺꾩꽍??湲곗????섎뒗 `current_data`瑜?state?먯꽌 李얠뒿?덈떎.
-
-```python
 source_results = [_source_result_from_current_data(current_data)] if current_data else []
 ```
 
-current_data媛 ?덉쑝硫?source result ?섎굹濡?媛먯뙃?덈떎. ?대젃寃??댁빞 ?ㅼ쓽 `Retrieval Payload Merger`? pandas ?몃뱶媛 ?좉퇋 議고쉶 寃곌낵? 媛숈? 諛⑹떇?쇰줈 泥섎━?????덉뒿?덈떎.
+이전 state에 current_data가 있으면 source_result 형태로 변환합니다.
 
 ```python
-return {"retrieval_payload": {...}}
+"used_current_data": True
 ```
 
-?꾩냽 吏덈Ц branch??retrieval payload ?뺤떇?쇰줈 諛섑솚?⑸땲?? ???몃뱶???닿쾬??DB 議고쉶?몄? current data ?ъ궗?⑹씤吏 紐곕씪??媛숈? 援ъ“濡??쎌뒿?덈떎.
+이 payload가 새 조회 결과가 아니라 기존 데이터를 재사용한 결과임을 표시합니다.

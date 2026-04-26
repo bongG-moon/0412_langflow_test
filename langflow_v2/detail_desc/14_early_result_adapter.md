@@ -1,38 +1,45 @@
-﻿# 14. Early Result Adapter
+# 14. Early Result Adapter
 
-## ??以???븷
+## 이 노드 역할
 
-`finish` branch瑜?理쒖쥌 ?④퀎媛 ?댄빐?????덈뒗 `analysis_result` ?뺥깭濡?諛붽씀???몃뱶?낅땲??
+`finish` 또는 clarification route를 최종 답변 단계가 이해할 수 있는 `analysis_result` 형태로 바꾸는 노드입니다.
 
-## ?몄젣 ?곕굹?
+## 왜 필요한가
 
-?ㅼ쓬怨?媛숈? 寃쎌슦?먮뒗 ?곗씠??議고쉶瑜?吏꾪뻾?섏? ?딄퀬 諛붾줈 ?듯빐???⑸땲??
+모든 질문이 DB 조회로 이어지는 것은 아닙니다.
 
-- ?꾩닔 議곌굔??遺議깊븿: `production.date`媛 ?놁쓬
-- 吏덈Ц???곗씠??議고쉶媛 ?꾩슂 ?녿뒗 ?덈궡??吏덈Ц??- intent ?④퀎?먯꽌 ?대? ?ㅽ뙣 ?먮뒗 clarification??寃곗젙??
-## ?낅젰
+예를 들어 다음과 같은 경우가 있습니다.
 
-| ?낅젰 ?ы듃 | ?섎? |
+- 질문에 맞는 dataset을 찾지 못한 경우
+- 필수 조회 조건이 부족한 경우
+- 사용자에게 추가 정보를 요청해야 하는 경우
+- 이미 안내 메시지를 바로 반환할 수 있는 경우
+
+이때도 downstream의 `Analysis Result Merger`, `Build Final Answer Prompt`, `Final Answer Builder`는 `analysis_result` 형태를 기대합니다. 이 노드는 조기 종료 결과를 그 형태로 맞춥니다.
+
+## 입력
+
+| 입력 포트 | 의미 |
 | --- | --- |
-| `intent_plan` | `Intent Route Router.finish` 異쒕젰?낅땲?? |
+| `intent_plan` | `Intent Route Router.finish` 출력입니다. |
 
-## 異쒕젰
+## 출력
 
-| 異쒕젰 ?ы듃 | ?섎? |
+| 출력 포트 | 의미 |
 | --- | --- |
-| `analysis_result` | final answer ?④퀎濡??섍만 ?쒖? 寃곌낵?낅땲?? |
+| `analysis_result` | final answer 단계로 넘길 조기 종료 결과입니다. |
 
-## 二쇱슂 ?⑥닔 ?ㅻ챸
+## 주요 함수 설명
 
-- `_payload_from_value`: ?낅젰 payload瑜?dict濡?爰쇰깄?덈떎.
-- `build_early_analysis_result`: finish ?댁쑀, ?먮윭, summary瑜?analysis_result濡??뺣━?⑸땲??
+- `_payload_from_value`: Langflow 입력값에서 dict를 꺼냅니다.
+- `build_early_analysis_result`: finish branch payload를 `analysis_result`로 변환합니다.
+- `build_result`: Langflow output method입니다.
 
-## 珥덈낫???ъ씤??
-`analysis_result`?쇰뒗 ?대쫫 ?뚮Ц??pandas 遺꾩꽍 寃곌낵泥섎읆 蹂댁씪 ???덉?留? ?ш린?쒕뒗 "議고쉶 ?놁씠 ?앸궃 寃곌낵"??媛숈? ?뺥깭濡?留욎텛??寃껋씠 紐⑹쟻?낅땲??
+## 초보자 확인용
 
-?ㅼ쓽 `Analysis Result Merger`??early/direct/pandas 以??대뼡 寃곌낵???섎굹濡??⑹퀜???섍린 ?뚮Ц???뺥깭瑜?留욎떠 ?〓땲??
+이 노드는 조회도 pandas 분석도 하지 않습니다. "조회하지 않고 끝내야 하는 상황"을 최종 답변으로 보낼 수 있게 모양만 맞춥니다.
 
-## ?곌껐
+## 연결
 
 ```text
 Intent Route Router.finish
@@ -42,115 +49,89 @@ Early Result Adapter.analysis_result
 -> Analysis Result Merger.early_result
 ```
 
-## Python 肄붾뱶 ?곸꽭 ?댁꽍
+## Python 코드 상세 해석
 
-### ?낅젰 ?덉떆
+### 입력 예시
 
 ```json
 {
   "intent_plan": {
     "route": "finish",
-    "query_mode": "clarification",
-    "missing_params": ["production.date"],
-    "response": "議고쉶???꾩슂???좎쭨 議곌굔???꾩슂?⑸땲??"
+    "query_mode": "finish",
+    "response": "데이터 조회에 필요한 필수 조건이 부족합니다: production.date",
+    "failure_type": "missing_required_params",
+    "required_params": {}
+  },
+  "state": {
+    "session_id": "abc",
+    "current_data": {}
   }
 }
 ```
 
-### 異쒕젰 ?덉떆
+### 출력 예시
 
 ```json
 {
   "analysis_result": {
     "success": false,
-    "result_type": "early_finish",
-    "response": "議고쉶???꾩슂???좎쭨 議곌굔???꾩슂?⑸땲??",
-    "errors": ["missing required params: production.date"],
-    "source_results": [],
-    "final_rows": []
+    "route": "finish",
+    "response": "데이터 조회에 필요한 필수 조건이 부족합니다: production.date",
+    "data": [],
+    "columns": [],
+    "row_count": 0,
+    "intent_plan": {
+      "route": "finish"
+    }
   }
 }
 ```
 
-### ?듭떖 ?⑥닔蹂??댁꽍
+### 핵심 함수별 해석
 
-| ?⑥닔 | ?낅젰 ?덉떆 | 異쒕젰 ?덉떆 | ????肄붾뱶媛 ?꾩슂?쒓? |
+| 함수 | 입력 예시 | 출력 예시 | 왜 필요한가 |
 | --- | --- | --- | --- |
-| `_payload_from_value` | `Data(data={"intent_plan": {...}})` | `{"intent_plan": {...}}` | router output??dict濡?爰쇰깄?덈떎. |
-| `build_early_analysis_result` | finish branch payload | analysis result | 議고쉶 ?놁씠 ?앸굹??branch???ㅼ쓽 `Analysis Result Merger`媛 ?쎌쓣 ???덈뒗 ?쒖? 寃곌낵濡?諛붽퓠?덈떎. |
-| `build_result` | Langflow input | `Data(data=analysis_result)` | Langflow output method?낅땲?? |
+| `_payload_from_value` | `Data(data={"intent_plan": {...}})` | `{"intent_plan": {...}}` | Router 출력 wrapper를 벗깁니다. |
+| `build_early_analysis_result` | finish branch payload | `analysis_result` | 조기 종료 결과를 final answer와 같은 흐름에 태웁니다. |
+| `build_result` | Langflow 입력값 | `Data(data=analysis_result)` | Langflow output method입니다. |
 
-### 肄붾뱶 ?먮쫫
+### 코드 흐름
 
 ```text
-finish/clarification branch ?낅젰
--> ?ъ슜?먯뿉寃?諛붾줈 蹂댁뿬以?response? errors 援ъ꽦
--> source_results/final_rows??鍮?諛곗뿴濡?留욎땄
--> Analysis Result Merger濡??꾨떖
+finish branch 입력
+-> skipped이면 skipped analysis_result 반환
+-> intent_plan.response 확인
+-> current_data 존재 여부 확인
+-> final answer가 읽을 analysis_result 형태로 변환
+-> Analysis Result Merger로 전달
 ```
 
-### 珥덈낫???ъ씤??
-紐⑤뱺 branch媛 理쒖쥌 ?듬??쇰줈 媛?ㅻ㈃ 異쒕젰 紐⑥뼇??媛숈븘???⑸땲?? ???몃뱶??"議고쉶 ???? branch瑜?analysis_result 紐⑥뼇?쇰줈 留욎텛??蹂?섍린?낅땲??
+## 함수 코드 단위 해석: `build_early_analysis_result`
 
-## ?⑥닔 肄붾뱶 ?⑥쐞 ?댁꽍: `build_early_analysis_result`
-
-???⑥닔??議고쉶 ?놁씠 ?앸굹???곹솴??理쒖쥌 ?듬? ?먮쫫??留욌뒗 `analysis_result`濡?諛붽퓠?덈떎.
-
-### ?⑥닔 input
-
-```json
-{
-  "intent_plan": {
-    "route": "finish",
-    "response": "?곗씠??議고쉶???꾩슂???꾩닔 議곌굔??遺議깊빀?덈떎: production.date",
-    "failure_type": "missing_required_params"
-  }
-}
-```
-
-### ?⑥닔 output
-
-```json
-{
-  "analysis_result": {
-    "success": false,
-    "tool_name": "early_finish",
-    "data": [],
-    "summary": "?곗씠??議고쉶???꾩슂???꾩닔 議곌굔??遺議깊빀?덈떎: production.date",
-    "error_message": "?곗씠??議고쉶???꾩슂???꾩닔 議곌굔??遺議깊빀?덈떎: production.date",
-    "analysis_logic": "missing_required_params"
-  }
-}
-```
-
-### ?듭떖 肄붾뱶 ?댁꽍
+### 핵심 코드 해석
 
 ```python
 payload = _payload_from_value(intent_plan_value)
 plan = payload.get("intent_plan") if isinstance(payload.get("intent_plan"), dict) else payload
 ```
 
-router output?먯꽌 ?ㅼ젣 intent plan??爰쇰깄?덈떎.
+입력에서 실제 plan을 꺼냅니다.
 
 ```python
-response = str(plan.get("response") or "?붿껌???꾨즺?섍린 ?꾪븳 ?뺣낫媛 遺議깊빀?덈떎.")
+if payload.get("skipped"):
+    return {"analysis_result": {"skipped": True, ...}}
 ```
 
-?ъ슜?먯뿉寃?蹂댁뿬以??덈궡 臾몄옣???뺥빀?덈떎. plan??response媛 ?놁쑝硫?湲곕낯 臾멸뎄瑜??곷땲??
+선택되지 않은 branch라면 다음 merger가 무시할 수 있게 skipped 결과를 반환합니다.
 
 ```python
-result = {
-    "success": False,
-    "tool_name": "early_finish",
-    "data": [],
-    ...
-}
+response = str(plan.get("response") or "요청을 완료할 수 없습니다. 조건을 조금 더 구체적으로 입력해주세요.")
 ```
 
-議고쉶?섏? ?딆븯?쇰?濡?`success=False`, `data=[]`?낅땲?? ?섏?留????몃뱶媛 ?쎌쓣 ???덇쾶 `tool_name`, `summary`, `analysis_logic` 媛숈? key??梨꾩썙 ?〓땲??
+plan에 있는 안내 메시지를 사용합니다. 없으면 기본 안내 문장을 만듭니다.
 
 ```python
-return {"analysis_result": result}
+"awaiting_analysis_choice": bool(state.get("current_data"))
 ```
 
-理쒖쥌 ?듬? builder源뚯? 媛숈? 寃쎈줈濡?蹂대궪 ???덈룄濡?analysis_result濡?媛먯뙃?덈떎.
+이전 current_data가 있으면 사용자가 이어서 분석을 선택할 여지가 있다고 표시합니다.

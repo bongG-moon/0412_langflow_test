@@ -1,53 +1,60 @@
-﻿# 07. LLM JSON Caller
+# 07. LLM JSON Caller
 
-## ??以???븷
+## 이 노드 역할
 
-???몃뱶媛 留뚮뱺 prompt瑜?LLM??蹂대궡怨? LLM ?묐떟 ?띿뒪?몃? `llm_result`濡?諛섑솚?⑸땲??
+앞 노드가 만든 prompt를 LLM에 보내고, LLM의 원문 응답 text를 `llm_result`로 반환합니다.
 
-## ?대뵒???곕굹?
+## 왜 필요한가
 
-???몃뱶??媛숈? ?뚯씪??Langflow ?붾㈃????踰??щ젮???ъ슜?⑸땲??
+v2 flow에서는 LLM을 세 군데에서 사용합니다.
 
-1. `LLM JSON Caller (Intent)`: ?ъ슜???섎룄 遺꾨쪟
-2. `LLM JSON Caller (Pandas)`: pandas 肄붾뱶 怨꾪쉷 ?앹꽦
-3. `LLM JSON Caller (Answer)`: 理쒖쥌 ?먯뿰???듬? ?앹꽦
+1. Intent 판단: 사용자가 새 조회를 원하는지, 후속 분석을 원하는지 판단합니다.
+2. Pandas 분석 계획: 조회된 데이터를 어떻게 pandas로 계산할지 계획합니다.
+3. 최종 답변 생성: 분석 결과를 자연어 문장으로 바꿉니다.
 
-## ?낅젰
+세 단계 모두 "prompt를 보내고 text를 받는다"는 동작은 같습니다. 그래서 이 공통 동작을 하나의 LLM caller로 분리했습니다.
 
-| ?낅젰 ?ы듃 | ?섎? |
+## 입력
+
+| 입력 포트 | 의미 |
 | --- | --- |
-| `prompt_payload` | prompt 臾몄옄?닿낵 愿??context?낅땲?? |
-| `llm_api_key` | LLM API key?낅땲?? 鍮꾩슦硫???normalize ?몃뱶??fallback???숈옉?⑸땲?? |
-| `model_name` | ?ъ슜??紐⑤뜽 ?대쫫?낅땲?? API key瑜??ｌ쑝硫??④퍡 ?낅젰?댁빞 ?⑸땲?? |
-| `temperature` | ?듬????쒕뜡?깆엯?덈떎. 蹂댄넻 `0`??沅뚯옣?⑸땲?? |
+| `prompt_payload` | prompt 문자열과 context입니다. |
+| `llm_api_key` | LLM API key입니다. 비어 있으면 LLM을 호출하지 않고 fallback용 빈 응답을 반환합니다. |
+| `model_name` | 사용할 모델 이름입니다. |
+| `temperature` | 응답 무작위성입니다. 계획 생성에는 보통 `0`을 권장합니다. |
 
-## 異쒕젰
+## 출력
 
-| 異쒕젰 ?ы듃 | ?섎? |
+| 출력 포트 | 의미 |
 | --- | --- |
-| `llm_result` | LLM ?먮Ц ?묐떟, ?먮윭 紐⑸줉, ?먮옒 prompt_payload瑜??ы븿?⑸땲?? |
+| `llm_result` | LLM 원문 응답, 오류 목록, 원래 prompt_payload를 담습니다. |
 
-## 二쇱슂 ?⑥닔 ?ㅻ챸
+## 주요 함수 설명
 
-- `_payload_from_value`: `prompt_payload`瑜?dict濡?爰쇰깄?덈떎.
-- `_load_llm`: LangChain chat model 媛앹껜瑜?留뚮벊?덈떎.
-- `call_llm_json`: prompt瑜?LLM??蹂대궡怨??묐떟 ?띿뒪?몃? 諛쏆뒿?덈떎.
+- `_payload_from_value`: `prompt_payload` 입력을 dict로 꺼냅니다.
+- `_load_llm`: LangChain chat model 객체를 생성합니다.
+- `call_llm_json`: prompt를 LLM에 보내고 응답 text를 표준 payload로 감쌉니다.
+- `build_result`: Langflow output method입니다.
 
-## OpenAI 紐⑤뜽濡?諛붽? ??
-?꾩옱 ?뚯뒪?몄슜 援ы쁽? LangChain chat model??遺덈윭?ㅻ뒗 遺遺꾨쭔 諛붽씀硫??⑸땲??
-肄붾뱶 ?덉뿉???ㅼ쓬 ?덉떆 二쇱꽍???ㅼ뼱 ?덉뒿?덈떎.
+## OpenAI 모델로 바꿀 때
+
+현재 구현이 Google GenAI용이라면, OpenAI 기준으로는 `_load_llm`만 아래처럼 바꾸면 됩니다.
 
 ```python
-from langchain_openai import ChatOpenAI
-return ChatOpenAI(api_key=llm_api_key, model=model_name, temperature=temperature)
+def _load_llm(llm_api_key: str, model_name: str, temperature: float):
+    from langchain_openai import ChatOpenAI
+    return ChatOpenAI(api_key=llm_api_key, model=model_name, temperature=temperature)
 ```
 
-## 珥덈낫???ъ씤??
-???몃뱶??JSON??吏곸젒 ?뚯떛?섏? ?딆뒿?덈떎.
-洹??댁쑀??LLM ?묐떟??源⑥?嫄곕굹 鍮꾩뼱 ?덉뼱??flow媛 硫덉텛吏 ?딄쾶 ?섍린 ?꾪빐?쒖엯?덈떎.
-?뚯떛怨?蹂댁젙? ?ㅼ쓽 normalize ?몃뱶媛 ?대떦?⑸땲??
+나머지 `call_llm_json` 구조는 그대로 둘 수 있습니다. provider별 차이는 `_load_llm`에만 모아 두는 것이 안전합니다.
 
-## ?곌껐
+## 초보자 확인용
+
+이 노드는 JSON을 직접 파싱하지 않습니다.
+
+LLM 응답이 깨진 JSON이거나 빈 문자열이어도, 이 노드는 그대로 다음 normalize 노드에 넘깁니다. JSON 파싱과 보정은 다음 단계가 담당합니다.
+
+## 연결
 
 ```text
 Build Intent Prompt.prompt_payload
@@ -63,14 +70,14 @@ Build Final Answer Prompt.prompt_payload
 -> Normalize Answer Text.llm_result
 ```
 
-## Python 肄붾뱶 ?곸꽭 ?댁꽍
+## Python 코드 상세 해석
 
-### ?낅젰 ?덉떆
+### 입력 예시
 
 ```json
 {
   "prompt_payload": {
-    "prompt": "Return JSON only: {\"route\":\"single_retrieval\"}"
+    "prompt": "Return JSON only."
   },
   "llm_api_key": "sk-...",
   "model_name": "gpt-4o-mini",
@@ -78,14 +85,16 @@ Build Final Answer Prompt.prompt_payload
 }
 ```
 
-### 異쒕젰 ?덉떆
+### 출력 예시
+
+정상 호출:
 
 ```json
 {
   "llm_result": {
-    "llm_text": "{\"route\":\"single_retrieval\",\"datasets\":[\"production\"]}",
+    "llm_text": "{\"query_mode\":\"retrieval\",\"needed_datasets\":[\"production\"]}",
     "prompt_payload": {
-      "prompt": "Return JSON only..."
+      "prompt": "Return JSON only."
     },
     "model_name": "gpt-4o-mini",
     "errors": []
@@ -93,43 +102,48 @@ Build Final Answer Prompt.prompt_payload
 }
 ```
 
-API key媛 鍮꾩뼱 ?덉쑝硫??뚯뒪?몄슜 fallback???묐룞?????덉뒿?덈떎.
+API key가 비어 있는 경우:
 
 ```json
 {
   "llm_result": {
     "llm_text": "",
-    "errors": ["LLM API key is empty; downstream normalizer will use fallback logic."]
+    "prompt_payload": {
+      "prompt": "Return JSON only."
+    },
+    "model_name": "",
+    "errors": [
+      "LLM API key is empty; downstream normalizer will use fallback logic."
+    ]
   }
 }
 ```
 
-### ?듭떖 ?⑥닔蹂??댁꽍
+### 핵심 함수별 해석
 
-| ?⑥닔 | ?낅젰 ?덉떆 | 異쒕젰 ?덉떆 | ????肄붾뱶媛 ?꾩슂?쒓? |
+| 함수 | 입력 예시 | 출력 예시 | 왜 필요한가 |
 | --- | --- | --- | --- |
-| `_payload_from_value` | `Data(data={"prompt_payload": {...}})` | `{"prompt_payload": {...}}` | ??prompt builder??Data瑜?dict濡?爰쇰깄?덈떎. |
-| `_load_llm` | `api_key`, `model_name`, `temperature` | LangChain chat model 媛앹껜 | ?ㅼ젣 LLM provider 媛앹껜瑜?留뚮뱶??遺遺꾩엯?덈떎. ?꾩옱??踰붿슜 ?대쫫???곌퀬, ?대? 援ы쁽??援먯껜?섍린 ?쎄쾶 ?〓땲?? |
-| `call_llm_json` | prompt payload, key, model | `llm_result` | prompt 臾몄옄?댁쓣 LLM??蹂대궡怨??묐떟 text瑜?諛쏆븘 ?쒖? payload濡?媛먯뙃?덈떎. |
-| `build_result` | Langflow ?낅젰媛?| `Data(data=llm_result)` | Langflow output method?낅땲?? |
+| `_payload_from_value` | `Data(data={"prompt_payload": {...}})` | `{"prompt_payload": {...}}` | 앞 노드 출력이 Data로 감싸져 있어도 실제 dict를 꺼냅니다. |
+| `_load_llm` | `api_key`, `model_name`, `temperature` | LangChain chat model 객체 | 실제 LLM provider 객체를 만드는 부분입니다. provider 변경 시 주로 여기를 바꿉니다. |
+| `call_llm_json` | prompt payload, key, model | `llm_result` | prompt를 LLM에 보내고 응답 text를 표준 구조로 감쌉니다. |
+| `build_result` | Langflow 입력값 | `Data(data=llm_result)` | Langflow output method입니다. |
 
-### 肄붾뱶 ?먮쫫
+### 코드 흐름
 
 ```text
-prompt_payload?먯꽌 prompt 臾몄옄??異붿텧
--> API key媛 ?덉쑝硫?LLM 媛앹껜 ?앹꽦
+prompt_payload에서 prompt 문자열 추출
+-> API key가 없으면 빈 llm_text와 오류 반환
+-> API key가 있으면 LLM 객체 생성
 -> llm.invoke(prompt)
--> response.content瑜?llm_text?????-> ?ㅼ쓬 normalizer媛 ?쎌쓣 llm_result 諛섑솚
+-> response.content를 llm_text로 저장
+-> 다음 normalizer가 읽을 llm_result 반환
 ```
 
-### 珥덈낫???ъ씤??
-???몃뱶??JSON??寃利앺븯吏 ?딆뒿?덈떎. LLM ?묐떟??"臾몄옄??洹몃?濡? ?ㅼ쓬 ?몃뱶???섍퉩?덈떎. JSON ?뚯떛怨?湲곕낯媛?蹂댁젙? ?ㅼ쓽 normalize ?몃뱶媛 ?대떦?⑸땲??
+## 함수 코드 단위 해석: `call_llm_json`
 
-## ?⑥닔 肄붾뱶 ?⑥쐞 ?댁꽍: `call_llm_json`
+이 함수는 prompt를 LLM에 보내고 응답 text를 표준 payload로 반환합니다.
 
-???⑥닔??prompt瑜?LLM??蹂대궡怨??묐떟 text瑜?`llm_result`濡?媛먯떥 諛섑솚?⑸땲??
-
-### ?⑥닔 input
+### 함수 input
 
 ```json
 {
@@ -144,7 +158,7 @@ prompt_payload?먯꽌 prompt 臾몄옄??異붿텧
 }
 ```
 
-### ?⑥닔 output
+### 함수 output
 
 ```json
 {
@@ -157,7 +171,7 @@ prompt_payload?먯꽌 prompt 臾몄옄??異붿텧
 }
 ```
 
-### ?듭떖 肄붾뱶 ?댁꽍
+### 핵심 코드 해석
 
 ```python
 payload = _payload_from_value(prompt_payload_value)
@@ -165,7 +179,7 @@ prompt_payload = payload.get("prompt_payload") if isinstance(payload.get("prompt
 prompt = str(prompt_payload.get("prompt") or "")
 ```
 
-???몃뱶?먯꽌 ??媛믪쓣 dict濡?諛붽씀怨? 洹??덉뿉???ㅼ젣 prompt 臾몄옄?댁쓣 爰쇰깄?덈떎.
+입력값에서 실제 prompt payload를 꺼냅니다. 앞 노드가 `{"prompt_payload": {...}}` 형태로 감싸서 보냈다면 한 번 벗깁니다.
 
 ```python
 if not str(llm_api_key or "").strip():
@@ -178,20 +192,15 @@ if not str(llm_api_key or "").strip():
     }
 ```
 
-API key媛 ?놁쑝硫?LLM???몄텧?섏? ?딆뒿?덈떎. ?????normalizer媛 fallback logic???곕룄濡?鍮?`llm_text`? ?ㅻ쪟 硫붿떆吏瑜?諛섑솚?⑸땲??
+API key가 없으면 LLM을 호출하지 않습니다. 대신 다음 normalizer가 fallback logic을 사용할 수 있게 빈 `llm_text`와 오류 메시지를 반환합니다.
 
 ```python
 llm = _load_llm(str(llm_api_key), str(model_name or ""), float(temperature or 0))
-```
-
-LangChain chat model 媛앹껜瑜?留뚮벊?덈떎. ?꾩옱 肄붾뱶?먯꽌??provider ?대쫫???몄텧?섏? ?딄퀬 踰붿슜 `llm_api_key`, `model_name`???ъ슜?⑸땲??
-
-```python
 response = llm.invoke(prompt)
 text = getattr(response, "content", str(response))
 ```
 
-LLM??prompt瑜?蹂대궡怨? ?묐떟 媛앹껜??`content`瑜?爰쇰깄?덈떎. `content`媛 ?놁쑝硫?媛앹껜瑜?臾몄옄?대줈 諛붽퓠?덈떎.
+LLM 객체를 만들고 prompt를 보냅니다. 응답 객체에 `content`가 있으면 그 값을 쓰고, 없으면 응답 객체 전체를 문자열로 바꿉니다.
 
 ```python
 return {
@@ -204,4 +213,4 @@ return {
 }
 ```
 
-?묐떟???뚯떛?섏? ?딄퀬 text 洹몃?濡??댁뒿?덈떎. ???ㅺ퀎 ?뺣텇??Intent, Pandas, Answer ??怨녹뿉??媛숈? LLM Caller瑜??ъ궗?⑺븷 ???덉뒿?덈떎.
+응답을 파싱하지 않고 text 그대로 반환합니다. 이 구조 덕분에 Intent, Pandas, Answer 단계가 같은 caller를 재사용할 수 있습니다.

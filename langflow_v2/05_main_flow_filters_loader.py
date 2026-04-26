@@ -61,46 +61,80 @@ def _unique_strings(values: list[Any]) -> list[str]:
 def _default_filters() -> Dict[str, Any]:
     return {
         "filter_set_id": "manufacturing_main_flow_default",
-        "description": "Standard semantic filter keys. Put value expansion rules in domain.process_groups.",
+        "description": "Standard semantic filters and required retrieval parameters. Put value expansion rules in domain.process_groups.",
+        "required_params": {
+            "date": {
+                "display_name": "Date",
+                "description": "Work date used as a retrieval boundary.",
+                "value_type": "date",
+                "value_shape": "scalar",
+                "normalized_format": "YYYYMMDD",
+                "aliases": ["date", "work_date", "WORK_DT", "일자", "날짜"],
+            },
+        },
         "filters": {
             "process_name": {
                 "display_name": "Process",
                 "description": "Manufacturing process or operation name.",
+                "value_type": "string",
+                "value_shape": "list",
+                "operator": "in",
                 "aliases": ["process", "process_name", "process_nm", "oper", "operation", "process label"],
             },
             "mode": {
                 "display_name": "Mode",
                 "description": "Product mode or product family.",
+                "value_type": "string",
+                "value_shape": "list",
+                "operator": "in",
                 "aliases": ["mode", "product mode"],
             },
             "line": {
                 "display_name": "Line",
                 "description": "Manufacturing line.",
+                "value_type": "string",
+                "value_shape": "list",
+                "operator": "in",
                 "aliases": ["line", "line_name"],
             },
             "product_name": {
                 "display_name": "Product",
                 "description": "Product name or product-like identifier.",
+                "value_type": "string",
+                "value_shape": "list",
+                "operator": "in",
                 "aliases": ["product", "product_name", "part", "device"],
             },
             "equipment_id": {
                 "display_name": "Equipment ID",
                 "description": "Equipment, tool, or machine identifier.",
+                "value_type": "string",
+                "value_shape": "list",
+                "operator": "in",
                 "aliases": ["equipment", "equipment_id", "eqp", "tool"],
             },
             "den": {
                 "display_name": "Density",
                 "description": "Memory density.",
+                "value_type": "string",
+                "value_shape": "list",
+                "operator": "in",
                 "aliases": ["den", "density"],
             },
             "tech": {
                 "display_name": "Technology",
                 "description": "Product or package technology.",
+                "value_type": "string",
+                "value_shape": "list",
+                "operator": "in",
                 "aliases": ["tech", "technology"],
             },
             "mcp_no": {
                 "display_name": "MCP No",
                 "description": "MCP or product code.",
+                "value_type": "string",
+                "value_shape": "list",
+                "operator": "in",
                 "aliases": ["mcp", "mcp_no", "mcp number"],
             },
         },
@@ -121,6 +155,9 @@ def _normalize_filter(key: str, value: Any) -> Dict[str, Any]:
     normalized = {
         "display_name": str(payload.get("display_name") or key).strip(),
         "description": str(payload.get("description") or "").strip(),
+        "value_type": str(payload.get("value_type") or "string").strip(),
+        "value_shape": str(payload.get("value_shape") or "list").strip(),
+        "operator": str(payload.get("operator") or "in").strip(),
         "aliases": aliases,
     }
     if known_values:
@@ -128,6 +165,18 @@ def _normalize_filter(key: str, value: Any) -> Dict[str, Any]:
     if normalized_aliases:
         normalized["value_aliases"] = normalized_aliases
     return normalized
+
+
+def _normalize_required_param(key: str, value: Any) -> Dict[str, Any]:
+    payload = deepcopy(value) if isinstance(value, dict) else {"description": str(value or "")}
+    return {
+        "display_name": str(payload.get("display_name") or key).strip(),
+        "description": str(payload.get("description") or "").strip(),
+        "value_type": str(payload.get("value_type") or "string").strip(),
+        "value_shape": str(payload.get("value_shape") or "scalar").strip(),
+        "normalized_format": str(payload.get("normalized_format") or payload.get("format") or "").strip(),
+        "aliases": _unique_strings([key, *_as_list(payload.get("aliases"))]),
+    }
 
 
 def load_main_flow_filters(main_flow_filters_json: Any) -> Dict[str, Any]:
@@ -142,9 +191,14 @@ def load_main_flow_filters(main_flow_filters_json: Any) -> Dict[str, Any]:
         config = _default_filters()
 
     filters = config.get("filters") if isinstance(config.get("filters"), dict) else {}
+    required_params = config.get("required_params") if isinstance(config.get("required_params"), dict) else {}
     default_filters = _default_filters()["filters"]
+    default_required_params = _default_filters()["required_params"]
     merged = {key: deepcopy(value) for key, value in default_filters.items()}
     merged.update({str(key): value for key, value in filters.items() if isinstance(value, dict)})
+    merged_required_params = {key: deepcopy(value) for key, value in default_required_params.items()}
+    merged_required_params.update({str(key): value for key, value in required_params.items() if isinstance(value, dict)})
+    config["required_params"] = {key: _normalize_required_param(key, value) for key, value in merged_required_params.items()}
     config["filters"] = {key: _normalize_filter(key, value) for key, value in merged.items()}
     return {"main_flow_filters_payload": {"main_flow_filters": config, "main_flow_filter_errors": errors}}
 

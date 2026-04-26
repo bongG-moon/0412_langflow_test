@@ -141,7 +141,7 @@ MongoDB 연결
 
 ### 초보자 포인트
 
-이 노드는 "도메인 규칙을 조회"하는 노드입니다. 사용자 질문을 판단하거나 계산하지 않습니다. 판단은 `05 Build Intent Prompt`, `07 Normalize Intent Plan`, `17 Build Pandas Prompt`에서 이 domain을 참고해 진행됩니다.
+이 노드는 "도메인 규칙을 조회"하는 노드입니다. 사용자 질문을 판단하거나 계산하지 않습니다. 판단은 `06 Build Intent Prompt`, `08 Normalize Intent Plan`, `18 Build Pandas Prompt`에서 이 domain을 참고해 진행됩니다.
 
 ## 함수 코드 단위 해석: `_merge_item`
 

@@ -1,191 +1,157 @@
-﻿# 24. Normalize Answer Text
+# 24. Normalize Answer Text
 
-## ??以???븷
+## 이 노드 역할
 
-理쒖쥌 ?듬? LLM ?묐떟???뚯떛?댁꽌 `answer_text`濡??뺣━?섎뒗 ?몃뱶?낅땲??
+최종 답변 LLM의 응답에서 실제 답변 문장만 꺼내 `answer_text`로 정리하는 노드입니다.
 
-## ?낅젰
+LLM 응답이 JSON이 아니거나 답변 필드가 비어 있으면 deterministic fallback 답변을 생성합니다.
 
-| ?낅젰 ?ы듃 | ?섎? |
+## 왜 필요한가
+
+마지막 LLM도 항상 같은 형식으로 답하지 않을 수 있습니다. 예를 들어 `{"answer": "..."}`로 줄 수도 있고, 그냥 문장만 줄 수도 있습니다.
+
+이 노드는 뒤쪽 `Final Answer Builder`가 항상 텍스트를 받을 수 있도록 LLM 응답을 정규화합니다.
+
+## 입력
+
+| 입력 포트 | 설명 |
 | --- | --- |
-| `llm_result` | `LLM JSON Caller (Answer)` 異쒕젰?낅땲?? |
+| `llm_result` | 최종 답변 생성을 담당한 `LLM JSON Caller`의 출력입니다. |
 
-## 異쒕젰
+## 출력
 
-| 異쒕젰 ?ы듃 | ?섎? |
+| 출력 포트 | 설명 |
 | --- | --- |
-| `answer_text` | ?먯뿰???듬?, ?섏씠?쇱씠?? warnings ?깆쓣 ?댁뒿?덈떎. |
+| `answer_text` | 최종 사용자 답변에 사용할 자연어 텍스트입니다. |
 
-## 二쇱슂 ?⑥닔 ?ㅻ챸
+## 주요 함수 설명
 
-- `_extract_json_object`: LLM ?묐떟?먯꽌 JSON??李얠뒿?덈떎.
-- `_fallback_answer`: LLM ?묐떟???녾굅???뚯떛 ?ㅽ뙣?덉쓣 ??洹쒖튃 湲곕컲 ?듬???留뚮벊?덈떎.
-- `_fallback_success_answer`: ?깃났 寃곌낵瑜??щ엺???쎌쓣 ???덈뒗 臾몄옣?쇰줈 留뚮벊?덈떎.
-- `normalize_answer_text`: LLM ?묐떟怨?fallback???⑹퀜 理쒖쥌 answer_text瑜?留뚮벊?덈떎.
+| 함수 | 역할 |
+| --- | --- |
+| `_extract_json_object` | LLM 응답에서 JSON object를 찾아냅니다. |
+| `_preview_table` | fallback 답변에 붙일 markdown table을 만듭니다. |
+| `_fallback_success_answer` | 성공 결과용 기본 답변을 만듭니다. |
+| `_fallback_answer` | 실패/성공 상황에 맞는 fallback 답변을 만듭니다. |
+| `normalize_answer_text` | 최종 answer text를 결정합니다. |
 
-## 湲곕? JSON ?덉떆
+## 초보자 확인용
 
-```json
-{
-  "answer": "?ㅻ뒛 DA怨듭젙 ?앹궛?됱? 珥?33,097?낅땲??",
-  "highlights": ["珥?12嫄?湲곗??낅땲??"]
-}
-```
+이 노드는 최종 답변 품질을 안정화하는 안전장치입니다.
 
-## 珥덈낫???ъ씤??
-???몃뱶???ъ슜?먯뿉寃?諛붾줈 異쒕젰?섏? ?딆뒿?덈떎.
-臾몄옣留??뺣━?섍퀬, ?ㅼ젣 ?붾㈃??硫붿떆吏? final_result??`Final Answer Builder`媛 留뚮벊?덈떎.
+LLM이 정상적으로 답하면 그 답을 사용하고, LLM 답이 비어 있거나 파싱이 어려우면 분석 결과를 바탕으로 기본 문장을 만들어 줍니다.
 
-LLM ?몄텧???ㅽ뙣?대룄 fallback ?듬????덉쑝誘濡??뚯뒪?멸? 媛?ν빀?덈떎.
-
-## ?곌껐
+## 연결
 
 ```text
-LLM JSON Caller (Answer).llm_result
+LLM JSON Caller.llm_result
 -> Normalize Answer Text.llm_result
 
 Normalize Answer Text.answer_text
 -> Final Answer Builder.answer_text
 ```
 
-## Python 肄붾뱶 ?곸꽭 ?댁꽍
+## Python 코드 상세 해석
 
-### ?낅젰 ?덉떆
+### 입력 예시
 
 ```json
 {
   "llm_result": {
-    "llm_text": "{\"response\":\"MODE A媛 150?쇰줈 媛??留롮뒿?덈떎.\"}",
+    "llm_text": "{\"answer\":\"DDR5 생산량은 100입니다.\"}",
     "prompt_payload": {
       "analysis_result": {
-        "final_rows": [
-          {"MODE": "A", "production": 150}
-        ]
+        "success": true,
+        "data": [{"MODE": "DDR5", "production": 100}]
       }
     }
   }
 }
 ```
 
-### 異쒕젰 ?덉떆
+### 출력 예시
 
 ```json
 {
-  "answer_text": {
-    "response": "MODE A媛 150?쇰줈 媛??留롮뒿?덈떎.",
-    "answer_source": "llm",
-    "errors": []
-  }
+  "answer_text": "DDR5 생산량은 100입니다."
 }
 ```
 
-LLM ?묐떟??鍮꾩뼱 ?덉쑝硫?fallback ?듬???留뚮벊?덈떎.
+### 핵심 함수별 해석
 
-```json
-{
-  "answer_text": {
-    "response": "珥?1嫄댁쓽 寃곌낵媛 ?덉뒿?덈떎. MODE A??production? 150?낅땲??",
-    "answer_source": "fallback"
-  }
-}
-```
-
-### ?듭떖 ?⑥닔蹂??댁꽍
-
-| ?⑥닔 | ?낅젰 ?덉떆 | 異쒕젰 ?덉떆 | ????肄붾뱶媛 ?꾩슂?쒓? |
+| 함수 | 입력 예시 | 출력 예시 | 설명 |
 | --- | --- | --- | --- |
-| `_extract_json_object` | LLM ?띿뒪??| JSON dict | 理쒖쥌 ?듬? LLM??JSON ??臾몄옣??遺숈뿬??response瑜?爰쇰깄?덈떎. |
-| `_preview_table` | rows | markdown table 臾몄옄??| fallback ?듬??먯꽌 ?곗씠?곕? ?щ엺???쎄린 ?쎄쾶 蹂댁뿬以띾땲?? |
-| `_metric_column` | rows | `"production"` | ?レ옄 metric 而щ읆??李얠븘 fallback 臾몄옣??留뚮뱾 ???곷땲?? |
-| `_dimension_text` | `{"MODE": "A"}` | `"MODE A"` | row??李⑥썝 ?뺣낫瑜??먯뿰?댁쿂???쒗쁽?⑸땲?? |
-| `_fallback_success_answer` | analysis result | ?듬? 臾몄옣 | LLM???ㅽ뙣?대룄 理쒖쥌 ?곗씠??湲곕컲 ?듬???留뚮뱾湲??꾪븳 ?덉쟾?μ튂?낅땲?? |
-| `_fallback_answer` | analysis result | ?듬? 臾몄옣 | success/error ?곹깭蹂?fallback ?듬???怨좊쫭?덈떎. |
-| `normalize_answer_text` | llm_result | answer_text payload | LLM ?듬? JSON???쒖? `response` ?뺥깭濡?留욎땅?덈떎. |
-| `build_answer` | Langflow input | `Data(data=answer_text)` | Langflow output method?낅땲?? |
+| `_extract_json_object` | LLM text | dict | JSON 응답을 추출합니다. |
+| `_fallback_success_answer` | analysis result | 문자열 | 성공 결과를 기본 문장으로 요약합니다. |
+| `_fallback_answer` | result | 문자열 | 실패면 오류 메시지, 성공이면 요약 답변을 만듭니다. |
+| `normalize_answer_text` | llm_result | answer_text | 최종 답변 텍스트를 결정합니다. |
 
-### 肄붾뱶 ?먮쫫
+### 코드 흐름
 
 ```text
-LLM answer text ?뚯떛
--> response ?꾨뱶 異붿텧
--> ?녾굅???ㅻ쪟硫?analysis_result 湲곕컲 fallback ?앹꽦
--> Final Answer Builder媛 ?쎌쓣 answer_text 諛섑솚
+LLM 응답 입력
+-> JSON answer 필드 확인
+-> text/content/message 필드 확인
+-> 비어 있으면 fallback 답변 생성
+-> answer_text 출력
 ```
 
-### 珥덈낫???ъ씤??
-???몃뱶???듬???留덉?留??덉쟾留앹엯?덈떎. LLM??JSON???섎せ 二쇨굅??API key媛 鍮꾩뼱 ?덉뼱?? 理쒖쥌 ?곗씠?곌? ?덉쑝硫?理쒖냼?쒖쓽 ?듬????앹꽦?⑸땲??
+## 함수 코드 단위 해석: `normalize_answer_text`
 
-## ?⑥닔 肄붾뱶 ?⑥쐞 ?댁꽍: `normalize_answer_text`
-
-???⑥닔??理쒖쥌 ?듬? LLM???묐떟??`{"response": "..."}` ?뺥깭濡??뺣━?⑸땲??
-
-### ?⑥닔 input
+### 함수 input
 
 ```json
 {
   "llm_result": {
-    "llm_text": "{\"response\":\"MODE A媛 150?쇰줈 媛??留롮뒿?덈떎.\"}",
+    "llm_text": "DDR5 생산량은 100입니다.",
     "prompt_payload": {
       "analysis_result": {
-        "data": [{"MODE": "A", "production": 150}]
+        "success": true,
+        "data": [{"MODE": "DDR5", "production": 100}]
       }
     }
   }
 }
 ```
 
-### ?⑥닔 output
+### 함수 output
 
 ```json
 {
-  "answer_text": {
-    "response": "MODE A媛 150?쇰줈 媛??留롮뒿?덈떎.",
-    "answer_source": "llm",
-    "errors": []
-  }
+  "answer_text": "DDR5 생산량은 100입니다."
 }
 ```
 
-### ?듭떖 肄붾뱶 ?댁꽍
+### 핵심 코드 해석
 
 ```python
 payload = _payload_from_value(llm_result_value)
 llm_result = payload.get("llm_result") if isinstance(payload.get("llm_result"), dict) else payload
 ```
 
-LLM Caller output?먯꽌 ?ㅼ젣 `llm_result`瑜?爰쇰깄?덈떎.
+LLM Caller output에서 실제 결과 dict를 꺼냅니다.
 
 ```python
-prompt_payload = llm_result.get("prompt_payload") if isinstance(llm_result.get("prompt_payload"), dict) else {}
-analysis_result = prompt_payload.get("analysis_result") if isinstance(prompt_payload.get("analysis_result"), dict) else {}
+raw_text = str(llm_result.get("llm_text") or "")
+parsed = _extract_json_object(raw_text)
 ```
 
-LLM ?듬????ㅽ뙣?덉쓣 ??fallback ?듬???留뚮뱾湲??꾪빐 ?먮옒 analysis result瑜?爰쇰깄?덈떎.
+LLM 응답 문자열에서 JSON을 먼저 찾아봅니다.
 
 ```python
-raw, errors = _parse_jsonish(llm_result.get("llm_text", ""))
+for key in ("answer", "response", "text", "content", "message"):
 ```
 
-LLM ?묐떟 JSON???뚯떛?⑸땲??
+여러 가능한 답변 필드명을 순서대로 확인합니다.
 
 ```python
-response = str(raw.get("response") or raw.get("answer") or "").strip() if isinstance(raw, dict) else ""
+if answer:
+    return {"answer_text": answer}
 ```
 
-LLM??`response` ???`answer`?쇨퀬 諛섑솚?대룄 ?듬??쇰줈 ?ъ슜?????덇쾶 ?????뺤씤?⑸땲??
+정상 답변이 있으면 그대로 반환합니다.
 
 ```python
-if not response:
-    response = _fallback_answer(analysis_result)
-    source = "fallback"
-else:
-    source = "llm"
+return {"answer_text": _fallback_answer(analysis_result)}
 ```
 
-LLM ?듬????놁쑝硫?final data瑜?蹂닿퀬 fallback ?듬???留뚮벊?덈떎.
-
-```python
-return {"answer_text": {"response": response, "answer_source": source, "errors": errors}}
-```
-
-Final Answer Builder媛 ?쎌쓣 ???덈뒗 ?쒖? ?뺥깭濡?諛섑솚?⑸땲??
+답변을 찾지 못하면 분석 결과를 바탕으로 기본 답변을 만듭니다.

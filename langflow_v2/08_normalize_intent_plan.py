@@ -375,7 +375,8 @@ def _filter_plan(filters: Dict[str, Any], column_filters: Dict[str, Any], needed
             dataset = configs.get(dataset_key, {})
             columns = _dataset_filter_columns(dataset, filter_key)
             if columns:
-                plan.append({"kind": "semantic", "field": filter_key, "dataset_key": dataset_key, "columns": columns, "operator": "in", "values": _as_list(values), "definition": filter_defs.get(filter_key, {})})
+                definition = filter_defs.get(filter_key, {})
+                plan.append({"kind": "semantic", "field": filter_key, "dataset_key": dataset_key, "columns": columns, "operator": definition.get("operator", "in"), "value_type": definition.get("value_type", "string"), "value_shape": definition.get("value_shape", "list"), "values": _as_list(values), "definition": definition})
     all_columns = set(current_columns)
     for dataset in configs.values():
         all_columns.update(_dataset_columns(dataset))
@@ -386,7 +387,7 @@ def _filter_plan(filters: Dict[str, Any], column_filters: Dict[str, Any], needed
         if not matched_datasets and str(column) in current_columns:
             matched_datasets = ["current_data"]
         for dataset_key in matched_datasets:
-            plan.append({"kind": "column", "field": str(column), "dataset_key": dataset_key, "columns": [str(column)], "operator": "in", "values": _as_list(values)})
+            plan.append({"kind": "column", "field": str(column), "dataset_key": dataset_key, "columns": [str(column)], "operator": "in", "value_type": "string", "value_shape": "list", "values": _as_list(values)})
     return plan
 
 

@@ -304,7 +304,6 @@ Recommended shape:
       "tool_name": "get_production_data",
       "db_key": "PKG_RPT",
       "required_params": ["date"],
-      "param_format": {"date": "YYYYMMDD"},
       "grain": ["WORK_DT", "OPER_NAME", "MODE"],
       "columns": [{"name": "WORK_DT"}, {"name": "OPER_NAME"}, {"name": "MODE"}, {"name": "production"}],
       "filter_mappings": {
@@ -320,12 +319,28 @@ Column metadata is optional for pandas because `Build Pandas Prompt` inspects
 actual columns after retrieval, but it is recommended because direct
 `column_filters` can only be validated against known table/current-data columns.
 
+`required_params` should only name the parameters that define a retrieval
+boundary, such as `date` or `lot_id`. Do not maintain `param_format` in the
+table catalog by default. The retriever function should convert normalized
+parameters into the DB/tool-specific format it needs, such as `YYYYMMDD`.
+
 ## Main Flow Filters Input
 
 `Main Flow Filters Loader` defines common semantic filter keys once:
 `process_name`, `mode`, `line`, `product_name`, `equipment_id`, `den`, `tech`,
 and `mcp_no`. Keep this input small: it should describe filter meanings and
 alternate key names, not every possible value.
+
+It can also define shared required retrieval parameters. For example, `date`
+is usually a scalar date normalized as `YYYYMMDD`. This tells the intent planner
+what shape to produce; the retriever still owns any DB-specific conversion.
+
+Each standard filter can also define the normalized value shape used by
+downstream planning:
+
+- `value_type`: usually `string`
+- `value_shape`: usually `list`
+- `operator`: usually `in`
 
 Do not put operational value expansion rules here by default. For example,
 `WB공정 -> ["W/B1", "W/B2"]` belongs in `domain.process_groups`, not in
@@ -363,24 +378,8 @@ Domain information is used only by:
 Retrieval nodes do not need domain metadata.
 
 MongoDB and direct JSON input both support aggregate documents and item
-documents.
-
-Aggregate document:
-
-```json
-{
-  "domain_id": "manufacturing_default",
-  "status": "active",
-  "metadata": {"version": "v2"},
-  "domain": {
-    "process_groups": {},
-    "terms": {},
-    "datasets": {},
-    "metrics": {},
-    "join_rules": []
-  }
-}
-```
+documents, but the canonical example is the item-document shape because it is
+easier to manage in the registration web UI and MongoDB.
 
 Item document:
 
@@ -406,11 +405,9 @@ For a question such as `어제 wb공정 생산달성율을 mode별로 알려줘`
 `target` from the metric's `required_datasets`, then the pandas step calculates
 `achievement_rate`.
 
-Example files:
+Canonical example file:
 
-- `examples/domain_payload_example.json`
 - `examples/mongodb_domain_items_example.json`
-- `examples/mongodb_domain_document_example.json`
 
 ## Oracle DB Config Input
 

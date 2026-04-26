@@ -60,6 +60,14 @@ TABLE_CATALOG = {
 }
 
 MAIN_FLOW_FILTERS = {
+    "required_params": {
+        "date": {
+            "value_type": "date",
+            "value_shape": "scalar",
+            "normalized_format": "YYYYMMDD",
+            "aliases": ["date", "work_date", "WORK_DT", "일자", "날짜"],
+        }
+    },
     "filters": {
         "process_name": {
             "aliases": ["process", "process_name", "oper", "공정"],
@@ -166,6 +174,14 @@ def run_visible_branch_flow(question, previous_state=None, session_id="session-a
 
 
 class LangflowV2SimplifiedFlowTests(unittest.TestCase):
+    def test_main_flow_filters_include_date_required_param_metadata(self):
+        payload = main_filters_mod.load_main_flow_filters(MAIN_FLOW_FILTERS)["main_flow_filters_payload"]["main_flow_filters"]
+        date_param = payload["required_params"]["date"]
+
+        self.assertEqual(date_param["value_type"], "date")
+        self.assertEqual(date_param["value_shape"], "scalar")
+        self.assertEqual(date_param["normalized_format"], "YYYYMMDD")
+
     def test_component_files_do_not_import_sibling_modules(self):
         root = Path(__file__).resolve().parents[1] / "langflow_v2"
         for path in root.glob("*.py"):
@@ -424,6 +440,10 @@ class LangflowV2SimplifiedFlowTests(unittest.TestCase):
         self.assertEqual(plan["filters"]["mode"], ["DDR5"])
         self.assertTrue(any(item["field"] == "process_name" and item["columns"] == ["OPER_NAME"] for item in plan["filter_plan"]))
         self.assertTrue(any(item["field"] == "mode" and item["columns"] == ["MODE"] for item in plan["filter_plan"]))
+        process_plan = next(item for item in plan["filter_plan"] if item["field"] == "process_name")
+        self.assertEqual(process_plan["operator"], "in")
+        self.assertEqual(process_plan["value_type"], "string")
+        self.assertEqual(process_plan["value_shape"], "list")
 
     def test_required_param_change_forces_retrieval_on_followup_like_question(self):
         first = run_visible_branch_flow("오늘 DA공정 DDR5 생산 보여줘")

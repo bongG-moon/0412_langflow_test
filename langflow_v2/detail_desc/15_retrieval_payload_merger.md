@@ -1,45 +1,47 @@
-﻿# 15. Retrieval Payload Merger
+# 15. Retrieval Payload Merger
 
-## ??以???븷
+## 이 노드 역할
 
-single, multi, follow-up retrieval branch 以??ㅼ젣濡??ㅽ뻾??payload ?섎굹瑜?怨⑤씪 ?ㅼ쓬 ?몃뱶濡??섍퉩?덈떎.
+single retrieval, multi retrieval, follow-up retrieval 중 실제 active branch 하나를 골라 하나의 `retrieval_payload`로 합치는 노드입니다.
 
-## ???꾩슂?쒓?
+## 왜 필요한가
 
-Langflow?먯꽌??branch媛 ?щ윭 媛쒕줈 媛덈씪?몃룄 ?ㅼ떆 ?섎굹濡??⑹퀜????泥섎━瑜?怨듯넻?쇰줈 ?????덉뒿?덈떎.
+Langflow 화면에서는 route별 branch가 여러 갈래로 나뉩니다.
 
-???몃뱶???ㅼ쓬 ??branch瑜??섎굹濡?紐⑥쓭?덈떎.
+- `single_retrieval`
+- `multi_retrieval`
+- `followup_retrieval`
 
-- single retrieval
-- multi retrieval
-- follow-up retrieval
+하지만 다음 `Retrieval Postprocess Router`는 하나의 retrieval payload만 받는 것이 단순합니다. 그래서 이 노드가 여러 branch 입력 중 skipped가 아닌 첫 번째 active payload를 선택합니다.
 
-## ?낅젰
+## 입력
 
-| ?낅젰 ?ы듃 | ?섎? |
+| 입력 포트 | 의미 |
 | --- | --- |
-| `single_retrieval` | ?⑥씪 議고쉶 branch 寃곌낵?낅땲?? |
-| `multi_retrieval` | 蹂듯빀 議고쉶 branch 寃곌낵?낅땲?? |
-| `followup_retrieval` | ?댁쟾 current_data ?ъ궗??branch 寃곌낵?낅땲?? |
+| `single_retrieval` | single retrieval branch의 조회 결과입니다. |
+| `multi_retrieval` | multi retrieval branch의 조회 결과입니다. |
+| `followup_retrieval` | `Current Data Retriever`의 후속 분석용 조회 payload입니다. |
 
-## 異쒕젰
+## 출력
 
-| 異쒕젰 ?ы듃 | ?섎? |
+| 출력 포트 | 의미 |
 | --- | --- |
-| `retrieval_payload` | ?ㅼ젣 ?좏깮??retrieval 寃곌낵?낅땲?? |
+| `retrieval_payload` | downstream에서 사용할 active retrieval payload입니다. |
 
-## 二쇱슂 ?⑥닔 ?ㅻ챸
+## 주요 함수 설명
 
-- `_retrieval_payload`: ?낅젰?먯꽌 ?ㅼ젣 retrieval_payload瑜?爰쇰깄?덈떎.
-- `merge_retrieval_payloads`: skipped媛 ?꾨땶 泥?踰덉㎏ ?좏슚 payload瑜??좏깮?⑸땲??
+- `_payload_from_value`: Langflow 입력값을 dict로 꺼냅니다.
+- `_retrieval_payload`: wrapper 안의 실제 `retrieval_payload`를 꺼냅니다.
+- `merge_retrieval_payloads`: 여러 branch 중 active retrieval payload 하나를 선택합니다.
+- `build_payload`: Langflow output method입니다.
 
-## 珥덈낫???ъ씤??
-???몃뱶???곗씠?곕? ?⑹궛?섍굅??join?섏? ?딆뒿?덈떎.
-"?щ윭 branch 異쒕젰 以??대뼡 branch媛 吏꾩쭨?멸?"瑜?怨좊Ⅴ????븷?낅땲??
+## 초보자 확인용
 
-?곗씠??join?대굹 怨꾩궛? ?섏쨷??pandas ?④퀎?먯꽌 ?⑸땲??
+이 노드는 데이터를 합산하거나 join하지 않습니다. 여러 route branch 중 "이번 턴에 실제로 선택된 조회 결과" 하나를 고르는 노드입니다.
 
-## ?곌껐
+multi retrieval의 여러 dataset 결과는 이미 `multi_retrieval` payload 안의 `source_results`에 들어 있습니다. 이 노드는 single과 multi를 합치는 것이 아니라 branch를 선택합니다.
+
+## 연결
 
 ```text
 Dummy/Oracle Retriever (Single).retrieval_payload
@@ -55,128 +57,135 @@ Retrieval Payload Merger.retrieval_payload
 -> Retrieval Postprocess Router.retrieval_payload
 ```
 
-## Python 肄붾뱶 ?곸꽭 ?댁꽍
+## Python 코드 상세 해석
 
-### ?낅젰 ?덉떆
+### 입력 예시
 
 ```json
 {
   "single_retrieval": {
-    "skipped": true
+    "retrieval_payload": {
+      "skipped": true,
+      "skip_reason": "selected route is multi_retrieval"
+    }
   },
   "multi_retrieval": {
     "retrieval_payload": {
-      "success": true,
+      "route": "multi_retrieval",
       "source_results": [
         {"dataset_key": "production"},
-        {"dataset_key": "wip"}
+        {"dataset_key": "target"}
       ]
     }
   },
-  "followup_retrieval": {
-    "skipped": true
-  }
+  "followup_retrieval": {}
 }
 ```
 
-### 異쒕젰 ?덉떆
-
-```json
-{
-  "retrieval_payload": {
-    "success": true,
-    "source_results": [
-      {"dataset_key": "production"},
-      {"dataset_key": "wip"}
-    ],
-    "selected_retrieval_branch": "multi_retrieval"
-  }
-}
-```
-
-### ?듭떖 ?⑥닔蹂??댁꽍
-
-| ?⑥닔 | ?낅젰 ?덉떆 | 異쒕젰 ?덉떆 | ????肄붾뱶媛 ?꾩슂?쒓? |
-| --- | --- | --- | --- |
-| `_retrieval_payload` | `{"retrieval_payload": {...}}` | `{...}` | retriever 異쒕젰????寃?媛먯떥???덉뼱???ㅼ젣 retrieval payload瑜?爰쇰깄?덈떎. |
-| `merge_retrieval_payloads` | single/multi/followup ?낅젰 | active retrieval payload | ?щ윭 branch 以?skipped媛 ?꾨땶 泥?踰덉㎏ ?ㅼ젣 寃곌낵瑜??좏깮?⑸땲?? |
-| `build_payload` | Langflow inputs | `Data(data=retrieval_payload)` | Langflow output method?낅땲?? |
-
-### 肄붾뱶 ?먮쫫
-
-```text
-single branch ?뺤씤
--> multi branch ?뺤씤
--> followup branch ?뺤씤
--> skipped媛 ?꾨땶 payload ?좏깮
--> selected_retrieval_branch ?쒖떆
-```
-
-### 珥덈낫???ъ씤??
-Langflow?먯꽌???щ윭 branch output???숈떆???ㅼ쓬 ?몃뱶???곌껐?????덉뒿?덈떎. 洹몃옒??媛?branch媛 `skipped`?몄? ?뺤씤?섍퀬 ?ㅼ젣 ?ㅽ뻾??branch留?怨좊Ⅴ???⑸쪟 吏?먯씠 ?꾩슂?⑸땲??
-
-## ?⑥닔 肄붾뱶 ?⑥쐞 ?댁꽍: `merge_retrieval_payloads`
-
-???⑥닔??single, multi, follow-up ???낅젰 以??ㅼ젣 ?ㅽ뻾??retrieval payload ?섎굹瑜?怨좊쫭?덈떎.
-
-### ?⑥닔 input
-
-```json
-{
-  "single_retrieval_value": {"skipped": true},
-  "multi_retrieval_value": {
-    "retrieval_payload": {
-      "route": "multi_retrieval",
-      "source_results": [{"dataset_key": "production"}]
-    }
-  },
-  "followup_retrieval_value": {"skipped": true}
-}
-```
-
-### ?⑥닔 output
+### 출력 예시
 
 ```json
 {
   "retrieval_payload": {
     "route": "multi_retrieval",
-    "source_results": [{"dataset_key": "production"}],
-    "selected_retrieval_branch": "multi_retrieval"
+    "source_results": [
+      {"dataset_key": "production"},
+      {"dataset_key": "target"}
+    ],
+    "merged_from": "multi_retrieval",
+    "skipped_retrieval_branches": [
+      {
+        "source": "single_retrieval",
+        "skip_reason": "selected route is multi_retrieval"
+      }
+    ]
   }
 }
 ```
 
-### ?듭떖 肄붾뱶 ?댁꽍
+### 핵심 함수별 해석
 
-```python
-for branch, value in candidates:
+| 함수 | 입력 예시 | 출력 예시 | 왜 필요한가 |
+| --- | --- | --- | --- |
+| `_payload_from_value` | `Data(data={"retrieval_payload": {...}})` | `{"retrieval_payload": {...}}` | Langflow wrapper를 벗깁니다. |
+| `_retrieval_payload` | `{"retrieval_payload": {"route": "single"}}` | `{"route": "single"}` | 실제 retrieval payload만 꺼냅니다. |
+| `merge_retrieval_payloads` | single, multi, followup | active retrieval payload | 여러 branch 중 skipped가 아닌 payload를 선택합니다. |
+| `build_payload` | Langflow 입력값 | `Data(data=retrieval_payload)` | Langflow output method입니다. |
+
+### 코드 흐름
+
+```text
+single/multi/followup branch 입력
+-> 각 입력에서 retrieval_payload 추출
+-> 순서대로 skipped 여부 확인
+-> 첫 번째 active payload 선택
+-> merged_from 표시
+-> skipped branch 목록 보존
+-> 다음 postprocess router로 전달
 ```
 
-single, multi, followup ?꾨낫瑜??쒖꽌?濡?寃?ы빀?덈떎.
+## 함수 코드 단위 해석: `merge_retrieval_payloads`
 
-```python
-payload = _retrieval_payload(value)
+이 함수는 branch별 retrieval payload 중 실제 사용할 하나를 선택합니다.
+
+### 함수 input
+
+```json
+{
+  "single_retrieval_value": {"retrieval_payload": {"skipped": true}},
+  "multi_retrieval_value": {"retrieval_payload": {"route": "multi_retrieval", "source_results": []}},
+  "followup_retrieval_value": null
+}
 ```
 
-媛??꾨낫?먯꽌 ?ㅼ젣 retrieval payload瑜?爰쇰깄?덈떎.
+### 함수 output
+
+```json
+{
+  "retrieval_payload": {
+    "route": "multi_retrieval",
+    "source_results": [],
+    "merged_from": "multi_retrieval"
+  }
+}
+```
+
+### 핵심 코드 해석
 
 ```python
-if not payload or payload.get("skipped"):
+candidates = [
+    ("single_retrieval", _retrieval_payload(single_retrieval_value)),
+    ("multi_retrieval", _retrieval_payload(multi_retrieval_value)),
+    ("followup_transform", _retrieval_payload(followup_retrieval_value)),
+]
+```
+
+세 branch 입력을 같은 형태의 후보 목록으로 만듭니다.
+
+```python
+if retrieval.get("skipped"):
+    skipped.append({"source": source, "skip_reason": retrieval.get("skip_reason", "")})
     continue
 ```
 
-媛믪씠 鍮꾩뼱 ?덇굅??skipped branch?대㈃ 嫄대꼫?곷땲??
+선택되지 않은 branch는 skipped 목록에 기록하고 다음 후보를 봅니다.
 
 ```python
-merged = deepcopy(payload)
-merged["selected_retrieval_branch"] = branch
+merged = deepcopy(retrieval)
+merged["merged_from"] = source
 return {"retrieval_payload": merged}
 ```
 
-?ㅼ젣 branch瑜?李얠쑝硫?蹂듭궗蹂몄쓣 留뚮뱾怨??대뼡 branch??붿? ?쒖떆????諛섑솚?⑸땲??
+skipped가 아닌 첫 번째 payload를 선택하고, 어디서 왔는지 `merged_from`에 기록합니다.
 
 ```python
-return {"retrieval_payload": {"skipped": True, ...}}
+return {
+    "retrieval_payload": {
+        "skipped": True,
+        "skip_reason": "No active retrieval branch produced a retrieval payload.",
+        ...
+    }
+}
 ```
 
-?대뒓 branch???ㅽ뻾?섏? ?딆븯?쇰㈃ skipped payload瑜?諛섑솚?⑸땲?? ???몃뱶媛 ?ㅽ뙣 ?먯씤???????덇쾶 ?섍린 ?꾪븿?낅땲??
+모든 branch가 비어 있거나 skipped라면 downstream이 안전하게 멈출 수 있도록 skipped payload를 반환합니다.

@@ -1,191 +1,168 @@
-﻿# 23. Build Final Answer Prompt
+# 23. Build Final Answer Prompt
 
-## ??以???븷
+## 이 노드 역할
 
-遺꾩꽍 寃곌낵瑜?蹂닿퀬 理쒖쥌 ?먯뿰???듬???留뚮뱾湲??꾪븳 LLM prompt瑜??묒꽦?섎뒗 ?몃뱶?낅땲??
+분석 결과를 사용자가 읽기 좋은 최종 답변으로 바꾸기 위한 LLM prompt를 만드는 노드입니다.
 
-## ???꾩슂?쒓?
+`analysis_result`의 요약, row preview, source 요약, 성공 여부를 정리해서 마지막 답변 생성 LLM에 전달합니다.
 
-`analysis_result`?먮뒗 row, summary, source_results, error ?깆씠 ?ㅼ뼱 ?덉뒿?덈떎.
-LLM?먭쾶 ???꾩껜瑜?臾댁옉??蹂대궡硫??덈Т 湲멸굅??遺덈챸?뺥븷 ???덉뒿?덈떎.
+## 왜 필요한가
 
-???몃뱶???꾩슂???뺣낫留??뺣━?댁꽌 "?ъ슜?먯뿉寃??대뼸寃??듯븷吏"瑜?臾삳뒗 prompt瑜?留뚮벊?덈떎.
+pandas 분석 결과는 row 목록과 metadata 중심입니다. 사용자는 보통 "무슨 의미인지", "몇 건인지", "핵심 값이 무엇인지"를 자연어로 알고 싶어 합니다.
 
-## ?낅젰
+이 노드는 최종 답변 LLM이 과장하지 않고 실제 결과에 근거해 답변하도록 필요한 정보만 정리합니다.
 
-| ?낅젰 ?ы듃 | ?섎? |
+## 입력
+
+| 입력 포트 | 설명 |
 | --- | --- |
-| `analysis_result` | `Analysis Result Merger` ?먮뒗 `MongoDB Data Store` 異쒕젰?낅땲?? |
-| `preview_row_limit` | LLM prompt???ｌ쓣 row ?섏엯?덈떎. ?꾩껜 final data ?쒖떆 ?섏????ㅻ쫭?덈떎. |
+| `analysis_result` | `MongoDB Data Store`를 거친 분석 결과입니다. |
+| `preview_row_limit` | final answer prompt에 포함할 row preview 개수입니다. |
 
-## 異쒕젰
+## 출력
 
-| 異쒕젰 ?ы듃 | ?섎? |
+| 출력 포트 | 설명 |
 | --- | --- |
-| `prompt_payload` | `LLM JSON Caller (Answer)`???섍만 prompt?낅땲?? |
+| `prompt_payload` | 최종 답변 LLM에 전달할 prompt와 분석 결과 context입니다. |
 
-## 二쇱슂 ?⑥닔 ?ㅻ챸
+## 주요 함수 설명
 
-- `_analysis_result`: ?낅젰?먯꽌 ?ㅼ젣 analysis_result瑜?爰쇰깄?덈떎.
-- `_safe_rows`: prompt???ｌ쓣 row ?섎? ?쒗븳?⑸땲??
-- `_row_count_from_result`: ?꾩껜 row count瑜?怨꾩궛?⑸땲??
-- `_source_summaries`: 議고쉶 source蹂?summary瑜?留뚮벊?덈떎.
-- `build_final_answer_prompt`: 理쒖쥌 ?듬???prompt瑜?留뚮벊?덈떎.
+| 함수 | 역할 |
+| --- | --- |
+| `_analysis_result` | 입력 wrapper에서 실제 analysis result를 꺼냅니다. |
+| `_safe_rows` | prompt에 넣을 row preview를 제한합니다. |
+| `_row_count_from_result` | 전체 row 수를 계산합니다. |
+| `_source_summaries` | analysis result 안의 source별 요약 정보를 추출합니다. |
+| `build_final_answer_prompt` | 최종 답변 생성을 위한 prompt payload를 만듭니다. |
 
-## 珥덈낫???ъ씤??
-???몃뱶??理쒖쥌 ?듬???吏곸젒 留뚮뱾吏 ?딆뒿?덈떎.
-理쒖쥌 ?듬? LLM??李멸퀬???뺣━???먮즺瑜?留뚮벊?덈떎.
+## 초보자 확인용
 
-`preview_row_limit`? LLM 鍮꾩슜??以꾩씠湲??꾪븳 媛믪엯?덈떎.
-?ъ슜?먯뿉寃?蹂댁뿬以?理쒖쥌 ?곗씠?곕뒗 `Final Answer Builder`媛 ?곕줈 泥섎━?⑸땲??
+이 노드는 최종 답변을 직접 만들지는 않습니다. 다음 LLM 호출이 답변 문장을 만들 수 있도록 재료를 정리합니다.
 
-## ?곌껐
+전체 데이터가 MongoDB로 저장되어 있어도 prompt에는 preview만 들어가고, 전체 row 수와 data reference 정보는 metadata로 유지됩니다.
+
+## 연결
 
 ```text
-Analysis Result Merger.analysis_result
-?먮뒗 MongoDB Data Store.stored_payload
+MongoDB Data Store.stored_payload
 -> Build Final Answer Prompt.analysis_result
 
 Build Final Answer Prompt.prompt_payload
--> LLM JSON Caller (Answer).prompt_payload
+-> LLM JSON Caller.prompt_payload
 ```
 
-## Python 肄붾뱶 ?곸꽭 ?댁꽍
+## Python 코드 상세 해석
 
-### ?낅젰 ?덉떆
+### 입력 예시
 
 ```json
 {
   "analysis_result": {
     "success": true,
-    "final_rows": [
-      {"MODE": "A", "production": 150},
-      {"MODE": "B", "production": 30}
+    "summary": "data analysis complete: 2 rows",
+    "data": [
+      {"MODE": "DDR5", "production": 100},
+      {"MODE": "LPDDR5", "production": 80}
     ],
-    "summary": "mode蹂??앹궛??
-  },
-  "preview_row_limit": "20"
+    "intent_plan": {
+      "analysis_goal": "모드별 생산량 확인"
+    }
+  }
 }
 ```
 
-### 異쒕젰 ?덉떆
+### 출력 예시
 
 ```json
 {
   "prompt_payload": {
-    "prompt": "Write a Korean answer using this final data...",
+    "prompt": "You are writing the final Korean answer...",
     "analysis_result": {
       "success": true,
-      "final_rows": [
-        {"MODE": "A", "production": 150},
-        {"MODE": "B", "production": 30}
-      ]
+      "summary": "data analysis complete: 2 rows"
     },
     "preview_rows": [
-      {"MODE": "A", "production": 150},
-      {"MODE": "B", "production": 30}
+      {"MODE": "DDR5", "production": 100}
     ],
     "row_count": 2
   }
 }
 ```
 
-### ?듭떖 ?⑥닔蹂??댁꽍
+### 핵심 함수별 해석
 
-| ?⑥닔 | ?낅젰 ?덉떆 | 異쒕젰 ?덉떆 | ????肄붾뱶媛 ?꾩슂?쒓? |
+| 함수 | 입력 예시 | 출력 예시 | 설명 |
 | --- | --- | --- | --- |
-| `_analysis_result` | `{"analysis_result": {...}}` | result dict | ??merger/store 異쒕젰?먯꽌 ?ㅼ젣 遺꾩꽍 寃곌낵瑜?爰쇰깄?덈떎. |
-| `_safe_rows` | rows, limit 20 | 理쒕? 20媛?rows | prompt???덈Т 留롮? row媛 ?ㅼ뼱媛吏 ?딄쾶 ?쒗븳?⑸땲?? |
-| `_row_count_from_result` | result, preview rows | ?꾩껜 row count | preview蹂대떎 ?꾩껜 寃곌낵媛 紐?嫄댁씤吏 ?듬????뚮젮二쇨린 ?꾪빐 怨꾩궛?⑸땲?? |
-| `_source_summaries` | analysis result | source ?붿빟 諛곗뿴 | 理쒖쥌 ?듬? LLM???대뼡 ?곗씠?곗뿉????寃곌낵?몄? ?????덇쾶 ?⑸땲?? |
-| `build_final_answer_prompt` | analysis result | prompt payload | 理쒖쥌 ?듬? LLM???ｌ쓣 臾몄옣, preview, ?붿빟??留뚮벊?덈떎. |
-| `build_prompt` | Langflow input | `Data(data=prompt_payload)` | Langflow output method?낅땲?? |
+| `_safe_rows` | rows, limit | preview rows | prompt에 넣을 row 수를 제한합니다. |
+| `_row_count_from_result` | analysis result | 숫자 | 실제 전체 row 수를 추정합니다. |
+| `_source_summaries` | analysis result | 요약 list | 어느 dataset에서 온 결과인지 정리합니다. |
+| `build_final_answer_prompt` | analysis_result | prompt_payload | 답변 LLM 호출용 prompt를 만듭니다. |
 
-### 肄붾뱶 ?먮쫫
+### 코드 흐름
 
 ```text
-analysis_result ?낅젰
--> final_rows preview ?앹꽦
--> row_count/source summary 怨꾩궛
--> 理쒖쥌 ?듬? LLM??吏耳쒖빞 ??洹쒖튃怨?JSON schema ?묒꽦
+analysis_result 입력
+-> success/error, summary 확인
+-> data preview와 row_count 계산
+-> source summary 생성
+-> 최종 답변용 prompt 작성
 ```
 
-### 珥덈낫???ъ씤??
-???몃뱶??LLM???몄텧?섏? ?딆뒿?덈떎. 理쒖쥌 ?듬? LLM??"理쒖쥌 ?곗씠?곗뿉 洹쇨굅???듯븯??怨??쎌쓣 prompt瑜?留뚮뱶????븷?낅땲??
+## 함수 코드 단위 해석: `build_final_answer_prompt`
 
-## ?⑥닔 肄붾뱶 ?⑥쐞 ?댁꽍: `build_final_answer_prompt`
-
-???⑥닔??理쒖쥌 ?듬? LLM?먭쾶 以?prompt? preview data瑜?留뚮벊?덈떎.
-
-### ?⑥닔 input
+### 함수 input
 
 ```json
 {
-  "analysis_result_value": {
-    "analysis_result": {
-      "success": true,
-      "data": [
-        {"MODE": "A", "production": 150},
-        {"MODE": "B", "production": 30}
-      ],
-      "summary": "data analysis complete: 2 rows"
-    }
-  },
-  "preview_row_limit_value": "20"
+  "analysis_result": {
+    "success": true,
+    "data": [{"MODE": "DDR5", "production": 100}],
+    "summary": "data analysis complete: 1 rows"
+  }
 }
 ```
 
-### ?⑥닔 output
+### 함수 output
 
 ```json
 {
   "prompt_payload": {
-    "prompt": "You are a manufacturing data analyst...",
-    "preview_rows": [
-      {"MODE": "A", "production": 150},
-      {"MODE": "B", "production": 30}
-    ],
-    "row_count": 2
+    "prompt": "최종 답변 작성 지시문",
+    "preview_rows": [{"MODE": "DDR5", "production": 100}],
+    "row_count": 1
   }
 }
 ```
 
-### ?듭떖 肄붾뱶 ?댁꽍
+### 핵심 코드 해석
 
 ```python
 result = _analysis_result(analysis_result_value)
 ```
 
-???몃뱶?먯꽌 ??媛믪쓣 ?ㅼ젣 analysis result dict濡?爰쇰깄?덈떎.
+입력값에서 실제 analysis result를 꺼냅니다.
 
 ```python
 rows = result.get("data") if isinstance(result.get("data"), list) else []
 preview_rows = _safe_rows(rows, preview_limit)
 ```
 
-理쒖쥌 ?곗씠??rows瑜?爰쇰궡怨? prompt???ｌ쓣 留뚰겮留??쒗븳?⑸땲??
+답변 prompt에 넣을 row preview를 만듭니다.
 
 ```python
-row_count = _row_count_from_result(result, preview_rows)
+row_count = _row_count_from_result(result, rows)
 ```
 
-?꾩껜 寃곌낵 嫄댁닔瑜?怨꾩궛?⑸땲?? preview媛 20嫄댁씠?대룄 ?ㅼ젣 row_count媛 200嫄댁씠硫??듬????꾩껜 嫄댁닔瑜??뚮젮以????덉뒿?덈떎.
+`row_count`, `data_ref.row_count`, 실제 rows 길이 중 가능한 값을 사용해 전체 row 수를 계산합니다.
 
 ```python
 source_summaries = _source_summaries(result)
 ```
 
-寃곌낵媛 ?대뼡 source dataset?먯꽌 ?붾뒗吏 ?붿빟?⑸땲??
+여러 데이터셋에서 온 결과라면 source별 summary도 prompt에 포함할 수 있게 정리합니다.
 
-```python
-prompt = f"""..."""
-```
-
-LLM?먭쾶 ?ㅼ쓬 洹쒖튃??吏?쒗빀?덈떎.
-
-- final data???녿뒗 ?댁슜??吏?대궡吏 留?寃?- ?レ옄??final data 湲곗??쇰줈 留먰븷 寃?- ?쒓뎅?대줈 ?듯븷 寃?- JSON ?뺥깭濡?`response`瑜?諛섑솚??寃?
 ```python
 return {"prompt_payload": {...}}
 ```
 
-LLM Caller媛 prompt瑜??쎄퀬, ??normalizer媛 ?먮옒 analysis_result??李멸퀬?????덇쾶 context瑜?媛숈씠 諛섑솚?⑸땲??
+LLM JSON Caller가 그대로 사용할 수 있는 prompt payload를 반환합니다.

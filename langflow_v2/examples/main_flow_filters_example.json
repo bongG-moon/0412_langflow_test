@@ -1,45 +1,79 @@
 {
   "filter_set_id": "manufacturing_main_flow_example",
-  "description": "Standard semantic filter keys. Put value expansion rules in domain.process_groups.",
+  "description": "Standard semantic filters and required retrieval parameters. Put value expansion rules in domain.process_groups.",
+  "required_params": {
+    "date": {
+      "display_name": "Date",
+      "description": "Work date used as a retrieval boundary.",
+      "value_type": "date",
+      "value_shape": "scalar",
+      "normalized_format": "YYYYMMDD",
+      "aliases": ["date", "work_date", "WORK_DT", "일자", "날짜"]
+    }
+  },
   "filters": {
     "process_name": {
       "display_name": "Process",
       "description": "Manufacturing process or operation name.",
+      "value_type": "string",
+      "value_shape": "list",
+      "operator": "in",
       "aliases": ["process", "process_name", "process_nm", "oper", "operation", "process label"]
     },
     "mode": {
       "display_name": "Mode",
       "description": "Product mode or product family.",
+      "value_type": "string",
+      "value_shape": "list",
+      "operator": "in",
       "aliases": ["mode", "product mode"]
     },
     "line": {
       "display_name": "Line",
       "description": "Manufacturing line.",
+      "value_type": "string",
+      "value_shape": "list",
+      "operator": "in",
       "aliases": ["line", "line_name"]
     },
     "product_name": {
       "display_name": "Product",
       "description": "Product name or product-like identifier.",
+      "value_type": "string",
+      "value_shape": "list",
+      "operator": "in",
       "aliases": ["product", "product_name", "part", "device"]
     },
     "equipment_id": {
       "display_name": "Equipment ID",
       "description": "Equipment, tool, or machine identifier.",
+      "value_type": "string",
+      "value_shape": "list",
+      "operator": "in",
       "aliases": ["equipment", "equipment_id", "eqp", "tool"]
     },
     "den": {
       "display_name": "Density",
       "description": "Memory density.",
+      "value_type": "string",
+      "value_shape": "list",
+      "operator": "in",
       "aliases": ["den", "density"]
     },
     "tech": {
       "display_name": "Technology",
       "description": "Product or package technology.",
+      "value_type": "string",
+      "value_shape": "list",
+      "operator": "in",
       "aliases": ["tech", "technology"]
     },
     "mcp_no": {
       "display_name": "MCP No",
       "description": "MCP or product code.",
+      "value_type": "string",
+      "value_shape": "list",
+      "operator": "in",
       "aliases": ["mcp", "mcp_no", "mcp number"]
     }
   }

@@ -1,207 +1,188 @@
-﻿# 26. State Memory Message Builder
+# 26. State Memory Message Builder
 
-## ??以???븷
+## 이 노드 역할
 
-`Final Answer Builder.next_state`瑜?Langflow Message History????ν븷 ???덈뒗 message ?뺥깭濡?諛붽씀???몃뱶?낅땲??
+`Final Answer Builder.next_state`를 Langflow Message History에 저장할 수 있는 memory message로 바꾸는 노드입니다.
 
-## ???꾩슂?쒓?
+다음 턴에서 `State Memory Extractor`가 이 message를 찾아 이전 대화 상태를 복원할 수 있게 합니다.
 
-Langflow Message History??蹂댄넻 user/assistant 硫붿떆吏瑜???ν빀?덈떎.
-?곕━??洹??덉뿉 ?ㅼ쓬 ?댁뿉???ъ슜??state???④퍡 ??ν빐???⑸땲??
+## 왜 필요한가
 
-洹몃옒?????몃뱶??state JSON ?욎뿉 marker瑜?遺숈씤 ?밸퀎??硫붿떆吏瑜?留뚮벊?덈떎.
-?ㅼ쓬 ?댁쓽 `State Memory Extractor`媛 洹?marker瑜?李얠븘 ?ㅼ떆 state瑜??쎌뒿?덈떎.
+Langflow canvas에서는 일반적으로 다음 실행으로 Python dict 상태가 자동 전달되지 않습니다. 그래서 state를 message 형태로 저장해 두고, 다음 질문이 들어올 때 다시 읽어야 합니다.
 
-## ?낅젰
+이 노드는 상태 dict를 JSON 문자열로 감싸고, 찾기 쉬운 marker를 붙여 memory에 넣을 수 있는 형태로 만듭니다.
 
-| ?낅젰 ?ы듃 | ?섎? |
+## 입력
+
+| 입력 포트 | 설명 |
 | --- | --- |
-| `next_state` | `Final Answer Builder.next_state` 異쒕젰?낅땲?? |
-| `memory_marker` | ?곹깭 硫붿떆吏?꾩쓣 ?쒖떆?섎뒗 臾몄옄?댁엯?덈떎. 湲곕낯媛믪쓣 洹몃?濡??곕㈃ ?⑸땲?? |
+| `next_state` | `Final Answer Builder.next_state` 출력입니다. |
+| `memory_marker` | memory에서 state message를 식별할 marker입니다. 기본값은 `__LANGFLOW_V2_AGENT_STATE__`입니다. |
 
-## 異쒕젰
+## 출력
 
-| 異쒕젰 ?ы듃 | ?섎? |
+| 출력 포트 | 설명 |
 | --- | --- |
-| `memory_message` | Message History Store???ｌ쓣 message?낅땲?? |
-| `memory_payload` | ??λ맆 state payload瑜??뺤씤?섍린 ?꾪븳 Data 異쒕젰?낅땲?? |
+| `memory_message` | Message History에 저장할 Message 객체입니다. |
+| `memory_payload` | 디버깅과 확인용 Data payload입니다. |
 
-## 二쇱슂 ?⑥닔 ?ㅻ챸
+## 주요 함수 설명
 
-- `_state_from_value`: next_state ?낅젰?먯꽌 ?ㅼ젣 state瑜?爰쇰깄?덈떎.
-- `_json_safe`: datetime ??JSON ??μ씠 ?대젮??媛믪쓣 ?덉쟾??媛믪쑝濡?諛붽퓠?덈떎.
-- `build_state_memory_message`: marker + JSON 臾몄옄???뺥깭??message瑜?留뚮벊?덈떎.
+| 함수 | 역할 |
+| --- | --- |
+| `_state_from_value` | 입력값에서 state dict를 꺼냅니다. |
+| `_json_safe` | JSON 직렬화 가능한 값으로 정리합니다. |
+| `build_state_memory_message` | marker와 state를 포함한 memory record를 만듭니다. |
 
-## 珥덈낫???ъ씤??
-???몃뱶???ъ슜?먯뿉寃?蹂댁씠???듬???留뚮뱶???몃뱶媛 ?꾨떃?덈떎.
-?꾩냽 吏덈Ц???꾪빐 Langflow ?대? 湲곗뼲????ν븯???몃뱶?낅땲??
+## 초보자 확인용
 
-Playground?먯꽌 ?꾩냽 吏덈Ц?????쒕떎硫????몃뱶媛 Message History Store???곌껐?섏뼱 ?덈뒗吏 ?뺤씤?댁빞 ?⑸땲??
+이 노드는 사용자에게 보이는 답변을 만들지 않습니다. 다음 질문에서 이전 조건과 데이터를 이어받을 수 있도록 상태를 보관하는 역할입니다.
 
-## ?곌껐
+예를 들어 사용자가 "그중 상위 5개만 보여줘"라고 물었을 때, 이전 질문의 날짜, 공정, mode, current_data를 복원하는 기반이 됩니다.
+
+## 연결
 
 ```text
 Final Answer Builder.next_state
 -> State Memory Message Builder.next_state
 
 State Memory Message Builder.memory_message
--> Message History (Store).message
+-> Message History 또는 memory 저장 노드
 ```
 
-?ㅼ쓬 ?댁뿉?쒕뒗 ?ㅼ떆:
+## Python 코드 상세 해석
+
+### 입력 예시
+
+```json
+{
+  "state": {
+    "session_id": "demo-session",
+    "chat_history": [
+      {"role": "user", "content": "오늘 DA공정 DDR5 생산 보여줘"}
+    ],
+    "context": {
+      "last_required_params": {"date": "20260426"},
+      "last_filters": {"mode": ["DDR5"]}
+    },
+    "current_data": {
+      "data": [{"MODE": "DDR5", "production": 100}]
+    }
+  }
+}
+```
+
+### 출력 예시
+
+```json
+{
+  "memory_payload": {
+    "marker": "__LANGFLOW_V2_AGENT_STATE__",
+    "type": "langflow_v2_agent_state",
+    "version": 1,
+    "session_id": "demo-session",
+    "chat_turns": 1,
+    "has_current_data": true,
+    "state": {
+      "session_id": "demo-session"
+    }
+  },
+  "memory_text": "{\"marker\":\"__LANGFLOW_V2_AGENT_STATE__\",...}"
+}
+```
+
+### 핵심 함수별 해석
+
+| 함수 | 입력 예시 | 출력 예시 | 설명 |
+| --- | --- | --- | --- |
+| `_state_from_value` | `{"state": {...}}` | state dict | 여러 가능한 wrapper에서 state를 찾습니다. |
+| `_json_safe` | state dict | JSON-safe dict | datetime 등 직렬화 어려운 값을 문자열로 바꿉니다. |
+| `build_state_memory_message` | next_state, marker | memory payload | 저장용 record와 text를 만듭니다. |
+
+### 코드 흐름
 
 ```text
-Message History (Retrieve).messages
--> State Memory Extractor.memory_messages
+next_state 입력
+-> state dict 추출
+-> marker, type, version, saved_at 추가
+-> memory_text JSON 생성
+-> memory_message와 memory_payload 출력
 ```
 
-## Python 肄붾뱶 ?곸꽭 ?댁꽍
+## 함수 코드 단위 해석: `build_state_memory_message`
 
-### ?낅젰 ?덉떆
+### 함수 input
 
 ```json
 {
   "next_state": {
     "state": {
-      "session_id": "abc",
+      "session_id": "demo-session",
       "chat_history": [],
-      "context": {
-        "last_route": "post_analysis"
-      },
-      "current_data": {
-        "rows": [
-          {"MODE": "A", "production": 150}
-        ]
-      }
+      "current_data": {"data": [{"production": 100}]}
     }
   },
-  "memory_marker": "__MANUFACTURING_AGENT_STATE__"
+  "marker": "__LANGFLOW_V2_AGENT_STATE__"
 }
 ```
 
-### 異쒕젰 ?덉떆
-
-`memory_message`:
-
-```text
-__MANUFACTURING_AGENT_STATE__
-{"marker":"__MANUFACTURING_AGENT_STATE__","state":{"session_id":"abc","current_data":{"rows":[...]}},"state_json":"{\"session_id\":\"abc\",...}"}
-```
-
-`memory_payload`:
+### 함수 output
 
 ```json
 {
   "memory_payload": {
-    "marker": "__MANUFACTURING_AGENT_STATE__",
-    "state": {
-      "session_id": "abc",
-      "current_data": {
-        "rows": [
-          {"MODE": "A", "production": 150}
-        ]
-      }
-    },
-    "state_json": "{\"session_id\":\"abc\",...}"
-  }
-}
-```
-
-### ?듭떖 ?⑥닔蹂??댁꽍
-
-| ?⑥닔 | ?낅젰 ?덉떆 | 異쒕젰 ?덉떆 | ????肄붾뱶媛 ?꾩슂?쒓? |
-| --- | --- | --- | --- |
-| `_make_message` | memory text | Langflow Message | Message History Store????ν븷 ???덈뒗 硫붿떆吏 媛앹껜瑜?留뚮벊?덈떎. |
-| `_state_from_value` | `{"state": {...}}` | state dict | Final Answer Builder??next_state?먯꽌 ?ㅼ젣 state留?爰쇰깄?덈떎. |
-| `_json_safe` | state dict | JSON ???媛?ν븳 dict | datetime/ObjectId 媛숈? 媛믪씠 ?덉뼱??JSON 臾몄옄?대줈 留뚮뱾 ???덇쾶 ?⑸땲?? |
-| `build_state_memory_message` | next_state, marker | memory payload | marker媛 遺숈? state snapshot 硫붿떆吏? JSON payload瑜?留뚮벊?덈떎. |
-| `_payload` | ?놁쓬 | cached memory payload | ??output??媛숈? 怨꾩궛??怨듭쑀?섍쾶 ?⑸땲?? |
-| `build_memory_message` | ?놁쓬 | Message | Message History Store???곌껐?섎뒗 異쒕젰?낅땲?? |
-| `build_memory_payload` | ?놁쓬 | Data | ?붾쾭源낆씠??API ??μ슜?쇰줈 蹂????덈뒗 援ъ“??異쒕젰?낅땲?? |
-
-### 肄붾뱶 ?먮쫫
-
-```text
-Final Answer Builder.next_state ?낅젰
--> state留?異붿텧
--> JSON ?덉쟾 ?뺥깭濡?蹂??-> marker ?ы븿 memory text ?앹꽦
--> Message History Store????ν븷 Message 諛섑솚
-```
-
-### 珥덈낫???ъ씤??
-???몃뱶??Langflow ?먯껜 Message History瑜?short-term memory泥섎읆 ?곌린 ?꾪븳 留덉?留??④퀎?낅땲?? ?ㅼ쓬 吏덈Ц ??`00 State Memory Extractor`媛 ??marker瑜?李얠븘 ?댁쟾 state瑜?蹂듭썝?⑸땲??
-
-## ?⑥닔 肄붾뱶 ?⑥쐞 ?댁꽍: `build_state_memory_message`
-
-???⑥닔???ㅼ쓬 ?댁뿉???쎌쓣 ???덈뒗 state snapshot 硫붿떆吏瑜?留뚮벊?덈떎.
-
-### ?⑥닔 input
-
-```json
-{
-  "next_state_value": {
-    "state": {
-      "session_id": "abc",
-      "current_data": {
-        "data": [{"MODE": "A", "production": 150}]
-      }
-    }
+    "marker": "__LANGFLOW_V2_AGENT_STATE__",
+    "type": "langflow_v2_agent_state",
+    "version": 1,
+    "session_id": "demo-session",
+    "has_current_data": true
   },
-  "marker_value": "__MANUFACTURING_AGENT_STATE__"
+  "state_json": "{\"session_id\":\"demo-session\",...}"
 }
 ```
 
-### ?⑥닔 output
-
-```json
-{
-  "memory_text": "__MANUFACTURING_AGENT_STATE__\n{\"marker\":\"__MANUFACTURING_AGENT_STATE__\",\"state\":{\"session_id\":\"abc\"}}",
-  "memory_payload": {
-    "marker": "__MANUFACTURING_AGENT_STATE__",
-    "state": {"session_id": "abc"},
-    "state_json": "{\"session_id\":\"abc\"}"
-  }
-}
-```
-
-### ?듭떖 肄붾뱶 ?댁꽍
-
-```python
-state = _state_from_value(next_state_value)
-```
-
-Final Answer Builder媛 留뚮뱺 next_state?먯꽌 ?ㅼ젣 state dict留?爰쇰깄?덈떎.
+### 핵심 코드 해석
 
 ```python
 marker = str(marker_value or DEFAULT_MEMORY_MARKER).strip() or DEFAULT_MEMORY_MARKER
 ```
 
-Message History?먯꽌 ?섏쨷????硫붿떆吏瑜?李얘린 ?꾪븳 marker瑜??뺥빀?덈떎.
+입력 marker가 비어 있으면 기본 marker를 사용합니다.
 
 ```python
-safe_state = _json_safe(state)
+state = _json_safe(_state_from_value(next_state_value))
 ```
 
-state ?덉뿉 JSON?쇰줈 諛붾줈 ??ν븯湲??대젮??媛믪씠 ?덉쑝硫?臾몄옄???깆쑝濡?諛붽퓠?덈떎.
-
-```python
-state_json = json.dumps(safe_state, ensure_ascii=False)
-```
-
-state瑜?JSON 臾몄옄?대줈 留뚮벊?덈떎. ?쒓???源⑥졇 蹂댁씠吏 ?딅룄濡?`ensure_ascii=False`瑜??ъ슜?⑸땲??
+입력값에서 state를 꺼내 JSON 저장 가능한 형태로 정리합니다.
 
 ```python
 record = {
     "marker": marker,
-    "state": safe_state,
-    "state_json": state_json,
+    "type": "langflow_v2_agent_state",
+    "version": 1,
+    "saved_at": datetime.now(timezone.utc).isoformat(),
+    "session_id": state.get("session_id", "default"),
+    "chat_turns": len(state.get("chat_history", [])),
+    "has_current_data": isinstance(state.get("current_data"), dict) and bool(state.get("current_data")),
+    "state": state,
 }
 ```
 
-?섏쨷??State Memory Extractor媛 ?쎌쓣 ???덈뒗 record 援ъ“瑜?留뚮벊?덈떎.
+다음 턴에서 찾고 해석할 수 있는 memory record를 구성합니다.
 
 ```python
-memory_text = f"{marker}\n{json.dumps(record, ensure_ascii=False)}"
+text = json.dumps(record, ensure_ascii=False, separators=(",", ":"), default=str)
 ```
 
-Langflow Message History?먮뒗 Message text濡???ν빐???섎?濡?marker? JSON record瑜??섎굹??臾몄옄?대줈 ?⑹묩?덈떎.
+Message History에 저장할 JSON 문자열을 만듭니다.
+
+```python
+return {
+    "memory_payload": record,
+    "memory_text": text,
+    "state": state,
+    "state_json": json.dumps(state, ensure_ascii=False, default=str),
+}
+```
+
+Message 출력과 디버깅용 Data 출력이 모두 사용할 수 있도록 record와 문자열을 함께 반환합니다.

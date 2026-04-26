@@ -10,7 +10,6 @@
       "tool_name": "get_production_data",
       "db_key": "PKG_RPT",
       "required_params": ["date"],
-      "param_format": {"date": "YYYYMMDD"},
       "grain": ["WORK_DT", "OPER_NAME", "MODE", "DEN", "TECH"],
       "columns": [
         {"name": "WORK_DT", "type": "date", "description": "Work date"},
@@ -41,7 +40,6 @@
       "tool_name": "get_target_data",
       "db_key": "PKG_RPT",
       "required_params": ["date"],
-      "param_format": {"date": "YYYYMMDD"},
       "grain": ["WORK_DT", "OPER_NAME", "MODE", "DEN", "TECH"],
       "columns": [
         {"name": "WORK_DT", "type": "date"},

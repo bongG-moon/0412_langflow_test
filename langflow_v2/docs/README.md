@@ -1,25 +1,36 @@
 # Langflow v2 Docs
 
-이 폴더는 Langflow v2 구현과 직접 관련된 설계, 구현, 학습 문서를 모아 둔 곳이다.
-
-루트 `docs/`는 LangGraph 기반 제조 Agent와 공통 실행 계약을 중심으로 정리하고, Langflow v2 전용 문서는 이 폴더에서 관리한다.
+이 폴더는 `langflow_v2` 구현을 이해하고 운영할 때 참고하는 보조 문서입니다.
 
 ## 문서 목록
 
 1. `01_LANGFLOW_STANDALONE_IMPLEMENTATION_PLAN.md`
-   - standalone 방식으로 Langflow custom component flow를 구현하기 위한 계획 문서이다.
+   - 초기 standalone Langflow custom component 구현 계획 문서입니다.
+   - 일부 내용은 현재 구현과 다를 수 있으므로, 최종 연결 기준은 `../README.md`를 우선합니다.
+
 2. `02_LANGFLOW_DOMAIN_ITEM_FLOW_GUIDE.md`
-   - MongoDB item document 기반 domain 등록/관리 방식과 이 프로젝트 전용 v2 구현 패턴을 설명한다.
+   - MongoDB item document 기반 domain 관리 방식과 현재 v2 main flow의 구현 패턴을 설명합니다.
+   - 현재 노드 번호 00-26 기준으로 정리되어 있습니다.
+
 3. `03_LANGFLOW_CUSTOM_NODE_CODE_GUIDE.md`
-   - 특정 프로젝트에 묶이지 않는 Langflow Custom Component, 멀티턴, ReAct, 분기 설계 범용 가이드이다.
+   - Langflow Custom Component 작성 방식, 입력/출력 payload 패턴, 분기 설계에 대한 일반 가이드입니다.
+
 4. `04_REQUIREMENTS_RISKS_WORKFLOW.md`
-   - 현재 v2 구현의 개발 요건, 예상 risk/대응 방안, 기능 단위 workflow를 정리한 문서이다.
+   - 요구사항, risk, 기능 단위 workflow를 정리한 참고 문서입니다.
+   - 세부 노드 번호보다 기능 의도와 검증 관점 위주로 읽는 문서입니다.
 
-## 함께 읽을 문서
+## 최신 기준 문서
 
-- `../README.md`
-  - v2 flow 전체 연결 지도와 노드 순서
-- `../detail_desc/README.md`
-  - v2 노드별 상세 설명 시작점
-- `../registration_web/README.md`
-  - PKG Domain Registry 웹 사용법
+현재 flow를 실제로 연결하거나 수정할 때는 다음 순서로 보는 것을 권장합니다.
+
+1. `../README.md`
+2. `../detail_desc/README.md`
+3. `02_LANGFLOW_DOMAIN_ITEM_FLOW_GUIDE.md`
+4. `../registration_web/README.md`
+
+## Canonical Example Files
+
+- Domain item: `../examples/mongodb_domain_items_example.json`
+- Table catalog: `../examples/table_catalog_example.json`
+- Main flow filters: `../examples/main_flow_filters_example.json`
+- Oracle DB config: `../examples/db_config_jsonish_example.txt`
