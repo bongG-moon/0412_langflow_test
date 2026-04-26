@@ -186,3 +186,68 @@ return {
 ```
 
 Message 출력과 디버깅용 Data 출력이 모두 사용할 수 있도록 record와 문자열을 함께 반환합니다.
+
+## 추가 함수 코드 단위 해석: `_state_from_value`
+
+`Final Answer Builder.next_state`가 어떤 wrapper로 들어오더라도 실제 state dict를 꺼내는 함수입니다.
+
+```python
+payload = _payload_from_value(value)
+state = payload.get("state") or payload.get("next_state") or payload.get("agent_state")
+```
+
+가능한 state key 이름을 순서대로 확인합니다.
+
+```python
+if isinstance(state, dict):
+    return deepcopy(state)
+```
+
+dict state를 찾으면 복사해서 반환합니다.
+
+```python
+state_json = payload.get("state_json")
+if isinstance(state_json, str):
+    parsed = json.loads(state_json)
+    return parsed if isinstance(parsed, dict) else {}
+```
+
+state가 JSON 문자열로만 들어온 경우 다시 dict로 복원합니다.
+
+```python
+return deepcopy(payload) if payload.get("chat_history") or payload.get("current_data") else {}
+```
+
+payload 자체가 state처럼 생긴 경우도 허용합니다. `chat_history`나 `current_data`가 있으면 state로 볼 수 있습니다.
+
+## 추가 함수 코드 단위 해석: `build_state_memory_message`의 record 구성
+
+```python
+record = {
+    "marker": marker,
+    "type": "langflow_v2_agent_state",
+    "version": 1,
+    "saved_at": datetime.now(timezone.utc).isoformat(),
+```
+
+Message History에서 다시 찾을 수 있도록 marker와 type/version을 붙이고 저장 시각을 남깁니다.
+
+```python
+"session_id": state.get("session_id", "default"),
+"chat_turns": len(state.get("chat_history", [])) if isinstance(state.get("chat_history"), list) else 0,
+"has_current_data": isinstance(state.get("current_data"), dict) and bool(state.get("current_data")),
+```
+
+디버깅하기 쉬운 요약 metadata를 record 최상위에 둡니다.
+
+```python
+"state": state,
+```
+
+실제 다음 턴 복원에 필요한 전체 state는 `state` key 안에 저장합니다.
+
+```python
+text = json.dumps(record, ensure_ascii=False, separators=(",", ":"), default=str)
+```
+
+Message History에 저장할 compact JSON 문자열을 만듭니다. `ensure_ascii=False`라 한글도 그대로 보존됩니다.

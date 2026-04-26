@@ -178,3 +178,49 @@ return "direct_response"
 ```
 
 그 외에는 조회 결과를 바로 답변 단계로 보냅니다.
+
+## 추가 함수 코드 단위 해석: `route_retrieval_postprocess`
+
+```python
+retrieval = _retrieval_payload(retrieval_payload_value)
+selected = _select_postprocess_route(retrieval)
+```
+
+입력에서 실제 retrieval payload를 꺼낸 뒤 direct response와 post analysis 중 어떤 branch가 맞는지 계산합니다.
+
+```python
+if selected != branch:
+    return {
+        "retrieval_payload": {
+            "skipped": True,
+            "skip_reason": f"selected postprocess route is {selected}",
+            ...
+        }
+    }
+```
+
+현재 output port가 선택된 branch가 아니면 skipped payload를 반환합니다. Langflow의 여러 output을 모두 연결해도 비활성 branch가 뒤 노드를 실행하지 않도록 하기 위한 구조입니다.
+
+```python
+routed = deepcopy(retrieval)
+routed["selected_postprocess_route"] = selected
+routed["branch"] = branch
+```
+
+선택된 branch에는 원본 retrieval payload를 복사해서 보내고, 어떤 postprocess route로 선택됐는지 표시합니다.
+
+## 추가 함수 코드 단위 해석: `_select_postprocess_route`의 early result 처리
+
+```python
+if retrieval.get("early_result"):
+    return "direct_response"
+```
+
+finish/clarification 계열 결과는 pandas 분석 대상이 아닙니다. 그래서 direct response branch로 보내 최종 답변 단계로 빠르게 이어지게 합니다.
+
+```python
+if plan.get("needs_pandas") or plan.get("query_mode") == "followup_transform" or len(source_results) > 1:
+    return "post_analysis"
+```
+
+분석 필요 flag, 후속 분석 모드, 여러 source 병합 중 하나라도 해당되면 pandas branch로 보냅니다.

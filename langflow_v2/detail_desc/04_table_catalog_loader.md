@@ -197,3 +197,64 @@ return {
 ```
 
 다음 노드가 항상 같은 key로 읽을 수 있게 `table_catalog_payload`로 감싸서 반환합니다.
+
+## 추가 함수 코드 단위 해석: `_normalize_columns`
+
+이 함수는 table catalog의 columns 설정을 항상 `{"name": "컬럼명"}` 형태의 list로 정리합니다.
+
+```python
+columns = []
+for item in _as_list(value):
+```
+
+입력이 단일 값이어도 list처럼 처리합니다. 사용자가 `"WORK_DT"` 하나만 넣어도 내부적으로 `["WORK_DT"]`처럼 다룹니다.
+
+```python
+if isinstance(item, dict):
+    name = str(item.get("name") or item.get("column") or "").strip()
+    if name:
+        columns.append({**deepcopy(item), "name": name})
+```
+
+컬럼이 dict로 들어오면 `name` 또는 `column` 값을 컬럼명으로 사용합니다. 기존 설명 필드가 있으면 유지하면서 `name`을 표준 key로 맞춥니다.
+
+```python
+elif str(item or "").strip():
+    columns.append({"name": str(item).strip()})
+```
+
+문자열로 들어온 컬럼은 `{"name": ...}` 구조로 변환합니다.
+
+## 추가 함수 코드 단위 해석: `_normalize_filter_mappings`
+
+표준 filter key와 실제 테이블 컬럼을 연결하는 `filter_mappings`를 정리하는 함수입니다.
+
+```python
+if not isinstance(value, dict):
+    return mappings
+```
+
+mapping이 dict가 아니면 빈 mapping을 반환합니다. 잘못된 입력 때문에 뒤 노드가 실패하지 않게 합니다.
+
+```python
+if isinstance(raw_columns, dict):
+    raw_columns = raw_columns.get("columns") or raw_columns.get("column") or raw_columns.get("names")
+```
+
+사용자가 `{"columns": [...]}`, `{"column": "OPER_NAME"}`처럼 넣은 경우도 허용합니다.
+
+```python
+for column in _as_list(raw_columns):
+    text = str(column or "").strip()
+    if text and text not in columns:
+        columns.append(text)
+```
+
+컬럼명을 list로 만들고 중복을 제거합니다.
+
+```python
+if str(key).strip() and columns:
+    mappings[str(key).strip()] = columns
+```
+
+filter key와 실제 컬럼 목록이 모두 있을 때만 최종 mapping에 넣습니다.

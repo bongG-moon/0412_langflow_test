@@ -107,3 +107,132 @@ Payload 형태:
 - `main_flow_filters`에 정의되지 않았지만 실제 테이블 컬럼으로 존재하는 조건은 `column_filters`로 유지합니다.
 
 이후 질문에서 `date` 같은 required parameter가 바뀌면, normalizer는 그 질문을 기존 current data 후속 분석으로 보지 않고 새 retrieval로 라우팅합니다.
+
+## 함수 코드 단위 해석: `_normalize_filter`
+
+이 함수는 `main_flow_filters.filters`에 들어온 각 표준 필터 정의를 같은 형식으로 정리합니다.
+
+### 함수 input
+
+```json
+{
+  "key": "process_name",
+  "value": {
+    "display_name": "Process",
+    "aliases": ["process", "공정"],
+    "known_values": ["D/A1", "W/B1"]
+  }
+}
+```
+
+### 함수 output
+
+```json
+{
+  "display_name": "Process",
+  "description": "",
+  "value_type": "string",
+  "value_shape": "list",
+  "operator": "in",
+  "aliases": ["process_name", "process", "공정"],
+  "known_values": ["D/A1", "W/B1"]
+}
+```
+
+### 핵심 코드 해석
+
+```python
+payload = deepcopy(value) if isinstance(value, dict) else {"description": str(value or "")}
+```
+
+필터 정의가 dict면 복사해서 사용하고, 문자열처럼 들어오면 description만 가진 dict로 바꿉니다.
+
+```python
+aliases = _unique_strings([key, *_as_list(payload.get("aliases"))])
+```
+
+필터 key 자체도 alias에 포함합니다. 그래서 사용자가 alias를 비워도 `process_name` 같은 표준 key는 항상 인식됩니다.
+
+```python
+known_values = _unique_strings(_as_list(payload.get("known_values") or payload.get("values")))
+```
+
+선택적으로 관리하는 대표 값 목록을 정리합니다. 모든 실제 값을 넣을 필요는 없고 자주 쓰는 값만 넣어도 됩니다.
+
+```python
+value_aliases = payload.get("value_aliases") if isinstance(payload.get("value_aliases"), dict) else {}
+```
+
+현재 설계에서는 값 alias를 필수로 관리하지 않습니다. 입력에 있을 때만 정규화해서 보존합니다.
+
+```python
+"value_type": str(payload.get("value_type") or "string").strip(),
+"value_shape": str(payload.get("value_shape") or "list").strip(),
+"operator": str(payload.get("operator") or "in").strip(),
+```
+
+표준 필터는 기본적으로 문자열 list를 `in` 조건으로 적용한다고 명시합니다.
+
+## 추가 함수 코드 단위 해석: `_normalize_required_param`
+
+일자 같은 필수 조회 파라미터를 정규화하는 함수입니다.
+
+```python
+payload = deepcopy(value) if isinstance(value, dict) else {"description": str(value or "")}
+```
+
+입력이 dict가 아니어도 description 기반의 설정으로 바꿉니다.
+
+```python
+"value_shape": str(payload.get("value_shape") or "scalar").strip(),
+```
+
+필수 파라미터는 기본적으로 단일 값입니다. 예를 들어 `date`는 하나의 `YYYYMMDD` 문자열입니다.
+
+```python
+"normalized_format": str(payload.get("normalized_format") or payload.get("format") or "").strip(),
+```
+
+`date`처럼 형식이 중요한 값은 `YYYYMMDD` 같은 normalized format을 보존합니다.
+
+```python
+"aliases": _unique_strings([key, *_as_list(payload.get("aliases"))]),
+```
+
+`date`, `WORK_DT`, `일자`, `날짜`처럼 같은 의미의 표현을 하나의 required param으로 묶습니다.
+
+## 추가 함수 코드 단위 해석: `load_main_flow_filters`
+
+이 함수는 사용자가 입력한 main flow filters와 기본 필터 정의를 병합합니다.
+
+```python
+parsed, errors = _parse_jsonish(main_flow_filters_json)
+```
+
+JSON 문자열, dict, Python literal 스타일 입력을 모두 받아 파싱합니다.
+
+```python
+if isinstance(parsed, dict) and isinstance(parsed.get("main_flow_filters"), dict):
+    config = deepcopy(parsed["main_flow_filters"])
+elif isinstance(parsed, dict) and isinstance(parsed.get("filters"), dict):
+    config = deepcopy(parsed)
+elif isinstance(parsed, dict) and parsed:
+    config = {"filters": deepcopy(parsed)}
+else:
+    config = _default_filters()
+```
+
+입력 구조가 `{"main_flow_filters": ...}`여도 되고, 바로 `{"filters": ...}`여도 됩니다. 비어 있으면 기본 필터를 사용합니다.
+
+```python
+merged = {key: deepcopy(value) for key, value in default_filters.items()}
+merged.update({str(key): value for key, value in filters.items() if isinstance(value, dict)})
+```
+
+기본 필터를 먼저 깔고 사용자 정의가 있으면 덮어씁니다. 사용자가 일부 필터만 정의해도 나머지 기본 필터는 유지됩니다.
+
+```python
+config["filters"] = {key: _normalize_filter(key, value) for key, value in merged.items()}
+```
+
+최종적으로 모든 필터를 동일한 구조로 정규화합니다.

@@ -185,3 +185,110 @@ result["data_is_reference"] = True
 ```
 
 payload에는 preview row와 `data_ref`만 남깁니다.
+
+## 추가 함수 코드 단위 해석: `_find_session_id`
+
+MongoDB에 저장할 row가 어느 대화 세션에서 나온 것인지 찾는 함수입니다.
+
+```python
+if isinstance(value, dict):
+    if value.get("session_id"):
+        return str(value["session_id"])
+```
+
+현재 dict에 `session_id`가 있으면 바로 반환합니다.
+
+```python
+for key in ("state", "current_data", "analysis_result", "retrieval_payload"):
+    nested = value.get(key)
+    session_id = _find_session_id(nested)
+```
+
+state나 analysis result처럼 session id가 들어 있을 가능성이 높은 nested key를 먼저 탐색합니다.
+
+```python
+for nested in value.values():
+    session_id = _find_session_id(nested)
+```
+
+정해진 key에서 찾지 못하면 dict의 모든 값을 재귀적으로 확인합니다.
+
+```python
+if isinstance(value, list):
+    for item in value:
+        session_id = _find_session_id(item)
+```
+
+list 안에 state가 들어 있는 경우도 처리합니다.
+
+## 추가 함수 코드 단위 해석: `_store_rows`
+
+실제 row list를 MongoDB document로 저장하는 함수입니다.
+
+```python
+ref_id = uuid.uuid4().hex
+safe_rows = _json_safe(rows)
+```
+
+새 참조 id를 만들고 rows를 JSON 저장 가능한 값으로 정리합니다.
+
+```python
+doc = {
+    "ref_id": ref_id,
+    "session_id": session_id or "default",
+    "path": path,
+    "created_at": datetime.now(timezone.utc).isoformat(),
+    "row_count": len(rows),
+    "columns": _rows_columns(rows),
+    "rows": safe_rows,
+}
+```
+
+나중에 다시 찾을 수 있도록 ref id, session id, payload path, row 수, 컬럼 목록을 함께 저장합니다.
+
+```python
+collection.replace_one({"ref_id": ref_id}, doc, upsert=True)
+```
+
+ref id 기준으로 document를 저장합니다.
+
+```python
+return {
+    "store": "mongodb",
+    "ref_id": ref_id,
+    "row_count": len(rows),
+    "columns": _rows_columns(rows),
+    "path": path,
+}
+```
+
+payload에 남길 참조 metadata를 반환합니다.
+
+## 추가 함수 코드 단위 해석: `store_payload_in_mongo`
+
+```python
+if not _truthy(enabled_value):
+    return {**payload, "mongo_data_store": {"enabled": False, "stored": False, "ref_count": 0, "errors": []}}
+```
+
+저장 기능이 꺼져 있으면 원본 payload를 그대로 통과시킵니다.
+
+```python
+if not mongo_uri:
+    return {**payload, "mongo_data_store": {"enabled": True, "stored": False, "ref_count": 0, "errors": ["Mongo URI is empty."]}}
+```
+
+Mongo URI가 없으면 저장하지 않고 오류 metadata만 붙입니다.
+
+```python
+compacted = _compact_with_refs(payload, collection, session_id, db_name, collection_name, preview_limit, min_rows, "", refs)
+```
+
+payload 전체를 재귀적으로 돌며 기준 row 수 이상의 `data` list를 MongoDB reference로 바꿉니다.
+
+```python
+compacted["mongo_data_refs"] = refs
+compacted["mongo_data_store"] = {"enabled": True, "stored": bool(refs), "ref_count": len(refs), "errors": []}
+```
+
+생성된 ref 목록과 저장 결과 metadata를 payload에 추가합니다.

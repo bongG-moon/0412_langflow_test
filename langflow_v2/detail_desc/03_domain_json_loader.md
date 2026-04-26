@@ -232,3 +232,76 @@ elif isinstance(raw, dict):
 ```
 
 입력이 이미 `{"metrics": {...}}` 같은 domain 형태이면 해당 section을 그대로 복사합니다.
+
+## 추가 함수 코드 단위 해석: `_parse_jsonish`
+
+이 함수는 사용자가 넣은 domain JSON을 최대한 유연하게 해석합니다.
+
+```python
+if isinstance(text, (dict, list)):
+    return deepcopy(text), []
+```
+
+이미 dict나 list로 들어온 값은 다시 파싱하지 않고 복사해서 반환합니다.
+
+```python
+raw = str(text or "").strip()
+if not raw:
+    return {}, []
+```
+
+입력이 비어 있으면 빈 dict와 빈 오류 목록을 반환합니다. 빈 설정도 flow가 깨지지 않도록 처리합니다.
+
+```python
+for parser in (json.loads, ast.literal_eval):
+    try:
+        return parser(raw), []
+    except Exception as exc:
+        errors.append(str(exc))
+```
+
+표준 JSON을 먼저 시도하고, Python dict처럼 작은따옴표가 들어간 형태도 `ast.literal_eval`로 한 번 더 시도합니다.
+
+```python
+return {}, errors
+```
+
+두 파서가 모두 실패하면 빈 dict와 파싱 오류 목록을 반환합니다.
+
+## 추가 함수 코드 단위 해석: `_merge_item`
+
+MongoDB Domain Loader와 같은 item 형식도 JSON 입력으로 받을 수 있게 해주는 병합 함수입니다.
+
+```python
+if isinstance(doc.get("domain"), dict):
+    for key, value in doc["domain"].items():
+```
+
+입력이 완성된 domain 문서라면 `domain` 내부의 key를 그대로 병합합니다.
+
+```python
+if key == "join_rules" and isinstance(value, list):
+    domain.setdefault("join_rules", []).extend(deepcopy(value))
+elif isinstance(value, dict):
+    domain.setdefault(key, {}).update(deepcopy(value))
+```
+
+`join_rules`는 list라서 append/extend 방식으로 합치고, `metrics`, `terms`, `process_groups` 같은 dict 계열은 key 기준으로 update합니다.
+
+```python
+gbn = str(doc.get("gbn") or doc.get("category") or "").strip()
+key = str(doc.get("key") or doc.get("name") or "").strip()
+payload = doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
+```
+
+item 문서라면 `gbn/key/payload` 형식으로 분해합니다.
+
+```python
+if gbn == "join_rules":
+    item = deepcopy(payload)
+    if key:
+        item.setdefault("name", key)
+    domain.setdefault("join_rules", []).append(item)
+```
+
+join rule item은 이름을 보존해 list에 추가합니다.

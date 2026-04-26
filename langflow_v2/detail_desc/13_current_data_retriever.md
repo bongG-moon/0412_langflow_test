@@ -151,3 +151,63 @@ source_results = [_source_result_from_current_data(current_data)] if current_dat
 ```
 
 이 payload가 새 조회 결과가 아니라 기존 데이터를 재사용한 결과임을 표시합니다.
+
+## 추가 함수 코드 단위 해석: `_source_result_from_current_data`
+
+이 함수는 `state.current_data`를 retriever가 만든 `source_result`처럼 보이도록 바꿉니다.
+
+```python
+rows = [row for row in current_data.get("data", []) if isinstance(row, dict)] if isinstance(current_data.get("data"), list) else []
+```
+
+현재 데이터 안에서 dict row만 추려냅니다.
+
+```python
+dataset_keys = current_data.get("source_dataset_keys") if isinstance(current_data.get("source_dataset_keys"), list) else []
+```
+
+이전 조회가 어떤 dataset에서 왔는지 확인합니다.
+
+```python
+"dataset_key": dataset_keys[0] if dataset_keys else current_data.get("dataset_key", "current_data"),
+```
+
+source dataset key가 있으면 첫 번째 값을 사용하고, 없으면 `current_data`로 표시합니다.
+
+```python
+"applied_params": deepcopy(current_data.get("source_required_params", current_data.get("retrieval_applied_params", {}))),
+"applied_filters": deepcopy(current_data.get("source_filters", {})),
+"applied_column_filters": deepcopy(current_data.get("source_column_filters", {})),
+```
+
+이전 조회에 적용된 조건을 source result에도 보존합니다. 후속 분석에서 필터 범위를 판단하는 근거가 됩니다.
+
+```python
+if isinstance(current_data.get("data_ref"), dict):
+    result["data_ref"] = deepcopy(current_data["data_ref"])
+    result["data_is_reference"] = True
+```
+
+현재 데이터가 MongoDB reference 형태라면 ref 정보도 함께 넘깁니다. 뒤에서 MongoDB Data Loader가 실제 rows를 다시 채울 수 있습니다.
+
+## 추가 함수 코드 단위 해석: `_build_current_datasets`
+
+```python
+for result in source_results:
+    dataset_key = str(result.get("dataset_key") or result.get("tool_name") or "current_data")
+```
+
+source result별 dataset key를 정합니다.
+
+```python
+data_ref = result.get("data_ref") if isinstance(result.get("data_ref"), dict) else {}
+```
+
+rows가 직접 없고 data_ref만 있는 경우도 고려합니다.
+
+```python
+"row_count": result.get("row_count") or data_ref.get("row_count") or len(rows),
+"columns": _rows_columns(rows) or data_ref.get("columns", []),
+```
+
+현재 데이터의 row 수와 컬럼 목록을 요약합니다. 이 정보는 prompt와 follow-up 판단에서 사용됩니다.

@@ -227,3 +227,107 @@ result["filter_plan"] = deepcopy(job.get("filter_plan", []))
 ```
 
 후속 질문에서 조건 상속과 scope 판단을 할 수 있도록 적용된 필터 정보를 결과에 보존합니다.
+
+## 추가 함수 코드 단위 해석: `_db_config_from_value`
+
+Oracle 연결 설정 입력을 dict로 정리하는 함수입니다.
+
+```python
+payload = _payload_from_value(value)
+if isinstance(payload.get("db_config"), dict):
+    return payload["db_config"], []
+```
+
+`{"db_config": {...}}` 구조로 들어온 경우 바로 DB 설정을 꺼냅니다.
+
+```python
+if isinstance(payload.get("DB_CONFIG"), dict):
+    return payload["DB_CONFIG"], []
+```
+
+대문자 key를 쓰는 설정도 허용합니다.
+
+```python
+if payload and not any(key in payload for key in ("text", "content")):
+    return payload, []
+```
+
+payload 자체가 DB 설정 dict처럼 들어온 경우 그대로 사용합니다.
+
+```python
+parsed, errors = parse_jsonish(_text_from_value(value))
+return (parsed if isinstance(parsed, dict) else {}), errors
+```
+
+문자열 입력이면 JSON 또는 Python literal 스타일로 파싱하고, 실패하면 오류 목록을 반환합니다.
+
+## 추가 함수 코드 단위 해석: `DBConnector.execute_query`
+
+실제 Oracle SQL을 실행하고 row list로 바꾸는 함수입니다.
+
+```python
+conn = self.get_connection(target_db)
+cursor = conn.cursor()
+cursor.execute(sql)
+```
+
+DB config에서 연결을 얻고 SQL을 실행합니다.
+
+```python
+columns = [col[0] for col in cursor.description]
+rows = cursor.fetchmany(fetch_limit) if fetch_limit else cursor.fetchall()
+```
+
+cursor metadata에서 컬럼명을 가져오고, fetch limit이 있으면 지정된 건수까지만 읽습니다.
+
+```python
+return [dict(zip(columns, row)) for row in rows]
+```
+
+Oracle row tuple을 pandas/LLM이 다루기 쉬운 list[dict] 구조로 바꿉니다.
+
+```python
+finally:
+    if cursor:
+        cursor.close()
+    if conn:
+        conn.close()
+```
+
+성공/실패와 관계없이 cursor와 connection을 닫습니다.
+
+## 추가 함수 코드 단위 해석: `_run_job`
+
+```python
+tool = TOOL_REGISTRY.get(tool_name) or TOOL_REGISTRY.get(str(job.get("dataset_key") or ""))
+```
+
+intent plan의 job이 어떤 Oracle SQL 함수로 이어지는지 찾습니다.
+
+```python
+missing = _missing_required_params(params, job.get("required_params", []))
+if missing:
+    return _error_result(job, f"Missing required parameter(s): {', '.join(missing)}", "missing_required_params")
+```
+
+SQL 실행 전에 날짜나 lot_id 같은 필수 파라미터가 있는지 확인합니다.
+
+```python
+params.update({key: value for key, value in (job.get("filters") or {}).items() if value not in (None, "", [])})
+params.update({key: value for key, value in (job.get("column_filters") or {}).items() if value not in (None, "", [])})
+```
+
+semantic filter와 column filter를 SQL tool 함수가 사용할 params로 합칩니다.
+
+```python
+result = tool(params, connector=connector, db_key=str(job.get("db_key") or "PKG_RPT"), fetch_limit=fetch_limit)
+```
+
+선택된 SQL tool 함수를 실행합니다. 각 tool 함수 내부에서 실제 SQL template과 required params를 사용합니다.
+
+```python
+except Exception as exc:
+    return _error_result(job, f"Oracle query failed for {job.get('dataset_key')}: {exc}", "retrieval_failed")
+```
+
+SQL 오류가 발생해도 전체 flow를 중단하지 않고 source result 하나의 실패로 표현합니다.

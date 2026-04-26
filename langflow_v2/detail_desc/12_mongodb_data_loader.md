@@ -179,3 +179,59 @@ result["data_is_preview"] = False
 ```
 
 저장된 rows를 실제 `data`로 채우고 preview 상태가 아니라고 표시합니다.
+
+## 추가 함수 코드 단위 해석: `_load_rows`
+
+MongoDB Data Store에서 저장해 둔 row list를 `data_ref`로 다시 읽는 함수입니다.
+
+```python
+ref_id = str(data_ref.get("ref_id") or data_ref.get("id") or "").strip()
+if not ref_id:
+    return []
+```
+
+참조 id가 없으면 조회할 수 없으므로 빈 list를 반환합니다.
+
+```python
+doc = collection.find_one({"ref_id": ref_id})
+if not isinstance(doc, dict):
+    return []
+```
+
+MongoDB collection에서 ref_id가 같은 document를 찾습니다. 없으면 빈 list입니다.
+
+```python
+rows = doc.get("rows") if isinstance(doc.get("rows"), list) else doc.get("data")
+return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+```
+
+저장 document의 `rows` 또는 과거 호환용 `data` 필드를 읽고, dict row만 남깁니다.
+
+## 추가 함수 코드 단위 해석: `load_payload_from_mongo`
+
+```python
+if not _truthy(enabled_value):
+    return {**payload, "mongo_data_load": {"enabled": False, "loaded": False, "ref_count": 0, "errors": []}}
+```
+
+사용자가 비활성화하면 payload를 그대로 통과시키고 load metadata만 붙입니다.
+
+```python
+if not mongo_uri:
+    return {**payload, "mongo_data_load": {"enabled": True, "loaded": False, "ref_count": 0, "errors": ["Mongo URI is empty."]}}
+```
+
+Mongo URI가 없으면 로딩을 시도하지 않고 오류 metadata를 남깁니다.
+
+```python
+client, collection = _connect_collection(mongo_uri, db_name, collection_name)
+hydrated = _hydrate_refs(payload, collection, loaded, "")
+```
+
+MongoDB에 연결한 뒤 payload 전체를 재귀적으로 돌며 data_ref를 실제 data로 채웁니다.
+
+```python
+hydrated["mongo_data_load"] = {"enabled": True, "loaded": bool(loaded), "ref_count": len(loaded), "loaded_refs": loaded, "errors": []}
+```
+
+몇 개의 ref를 불러왔는지 metadata로 남깁니다.

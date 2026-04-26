@@ -226,3 +226,57 @@ return routed
 ```
 
 현재 output port가 선택 route라면 원래 payload를 복사해서 넘깁니다. 원본을 직접 수정하지 않으려고 `deepcopy`를 사용합니다.
+
+## 추가 함수 코드 단위 해석: `_select_route`
+
+이 함수는 normalizer가 만든 `intent_plan`을 실제 Langflow branch 이름으로 바꿉니다.
+
+```python
+route = str(plan.get("route") or "").strip()
+query_mode = str(plan.get("query_mode") or "").strip()
+```
+
+LLM과 normalizer가 둘 다 route 관련 값을 줄 수 있으므로 `route`와 `query_mode`를 함께 확인합니다.
+
+```python
+if route == "finish" or query_mode in {"finish", "clarification"}:
+    return "finish"
+```
+
+추가 조건 요청이나 조기 종료 응답은 조회 branch로 보내지 않고 `finish`로 보냅니다.
+
+```python
+if route == "followup_transform" or query_mode == "followup_transform":
+    return "followup_transform"
+```
+
+현재 데이터 후속 분석이면 `Current Data Retriever`로 이어지는 branch를 선택합니다.
+
+```python
+if route == "multi_retrieval" or len(plan.get("retrieval_jobs", []) if isinstance(plan.get("retrieval_jobs"), list) else []) > 1:
+    return "multi_retrieval"
+```
+
+여러 dataset을 조회해야 하면 multi retrieval branch를 선택합니다. route 값이 명시되지 않았더라도 job이 2개 이상이면 multi로 판단합니다.
+
+```python
+return "single_retrieval"
+```
+
+그 외 일반 조회는 single retrieval입니다.
+
+## 추가 함수 코드 단위 해석: `_intent_payload`
+
+```python
+payload = _payload_from_value(value)
+if isinstance(payload.get("intent_plan"), dict):
+    return payload
+```
+
+입력이 이미 `{"intent_plan": {...}}` 구조면 그대로 사용합니다.
+
+```python
+return {"intent_plan": payload, "retrieval_jobs": payload.get("retrieval_jobs", []) if isinstance(payload, dict) else []}
+```
+
+intent plan dict 자체가 바로 들어온 경우에도 router가 같은 구조로 처리할 수 있게 감싸줍니다.

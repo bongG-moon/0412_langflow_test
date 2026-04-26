@@ -309,3 +309,171 @@ route = "followup_transform" if query_mode == "followup_transform" else ("multi_
 ```
 
 2차 질문은 날짜와 필터가 바뀌지 않고 현재 결과를 가리키므로 `followup_transform`입니다.
+
+## 추가 함수 코드 단위 해석: `_extract_date`
+
+이 함수는 사용자 질문에서 날짜를 `YYYYMMDD` 형식으로 추출합니다.
+
+```python
+base = _runtime_today(reference_date)
+```
+
+기준 날짜를 가져옵니다. 테스트나 재현이 필요하면 `reference_date`를 넣고, 비어 있으면 Asia/Seoul 기준 현재 날짜를 사용합니다.
+
+```python
+if any(token in lowered for token in ("today", "금일", "오늘")):
+    return base.strftime("%Y%m%d")
+```
+
+"오늘" 계열 표현은 기준 날짜로 변환합니다.
+
+```python
+if any(token in lowered for token in ("yesterday", "어제", "전일")):
+    return (base - timedelta(days=1)).strftime("%Y%m%d")
+```
+
+"어제" 계열 표현은 기준 날짜에서 하루를 뺍니다.
+
+```python
+match = re.search(r"\b(20\d{2})[-./]?(0[1-9]|1[0-2])[-./]?([0-2]\d|3[01])\b", str(question or ""))
+```
+
+`2026-04-26`, `20260426`, `2026.04.26` 같은 명시 날짜를 찾습니다.
+
+## 추가 함수 코드 단위 해석: `_filters_from_question`
+
+이 함수는 질문 문장에서 표준 의미 필터를 deterministic하게 추출합니다.
+
+```python
+process_matches = re.findall(r"\b(?:D/A|DA|W/B|WB)\s*-?\s*\d+\b", question, flags=re.IGNORECASE)
+```
+
+`DA1`, `D/A1`, `WB2`, `W/B2`처럼 구체 공정명이 직접 들어온 경우를 찾습니다.
+
+```python
+if text.startswith("DA"):
+    text = text.replace("DA", "D/A", 1)
+if text.startswith("WB"):
+    text = text.replace("WB", "W/B", 1)
+```
+
+사용자가 `DA1`처럼 입력해도 실제 값은 `D/A1` 형태로 맞춥니다.
+
+```python
+elif _contains_any(question, ["DA공정", "D/A공정", "DA process"]):
+    filters["process_name"] = ["D/A1", "D/A2", "D/A3"]
+```
+
+"DA공정"처럼 그룹 표현이 들어오면 domain 없이도 대표 공정 목록으로 확장합니다.
+
+```python
+groups = (domain or {}).get("process_groups") if isinstance((domain or {}).get("process_groups"), dict) else {}
+```
+
+domain에 `process_groups`가 있으면 사용자 정의 그룹도 확인합니다. 여기서 관리하는 것이 `value_aliases`보다 유지보수하기 쉬운 구조입니다.
+
+```python
+modes = [token for token in ("DDR5", "LPDDR5", "HBM3", "HBM") if token.lower() in question.lower()]
+```
+
+대표 제품 mode는 질문에서 바로 추출합니다.
+
+```python
+value_aliases = definition.get("value_aliases") if isinstance(definition.get("value_aliases"), dict) else {}
+known_values = definition.get("known_values") or definition.get("values")
+```
+
+main flow filters에 선택적으로 들어 있는 값 alias나 known values도 사용합니다. 다만 이 값들은 필수가 아니라 보조 힌트입니다.
+
+## 추가 함수 코드 단위 해석: `_filter_plan`
+
+이 함수는 표준 의미 필터를 실제 dataset 컬럼에 매핑한 실행 계획으로 바꿉니다.
+
+```python
+configs = _dataset_configs(table_catalog)
+active_datasets = needed_datasets or list(configs.keys())
+```
+
+조회할 dataset이 정해져 있으면 그 dataset만 대상으로 하고, 비어 있으면 catalog 전체를 대상으로 filter plan을 만듭니다.
+
+```python
+columns = _dataset_filter_columns(dataset, filter_key)
+```
+
+`process_name` 같은 표준 key가 해당 dataset의 어떤 실제 컬럼에 연결되는지 찾습니다. 이때 table catalog의 `filter_mappings`가 핵심입니다.
+
+```python
+plan.append({
+    "kind": "semantic",
+    "field": filter_key,
+    "dataset_key": dataset_key,
+    "columns": columns,
+    "operator": definition.get("operator", "in"),
+    "value_type": definition.get("value_type", "string"),
+    "value_shape": definition.get("value_shape", "list"),
+    "values": _as_list(values),
+    "definition": definition,
+})
+```
+
+후속 Retriever나 pandas executor가 그대로 사용할 수 있도록 field, dataset, 실제 columns, 값, 값 형식을 모두 포함합니다.
+
+```python
+for column, values in column_filters.items():
+    if str(column) not in all_columns:
+        continue
+```
+
+main flow filters에 정의되지 않았더라도 실제 테이블 컬럼이면 column filter로 허용합니다.
+
+## 추가 함수 코드 단위 해석: `_required_param_changed`
+
+후속 질문처럼 보이더라도 필수 조회 조건이 바뀌면 신규 조회로 돌리기 위한 판단 함수입니다.
+
+```python
+for key, value in explicit_params.items():
+    if value in (None, "", []):
+        continue
+```
+
+이번 질문에서 명시적으로 추출된 required param만 확인합니다.
+
+```python
+if previous.get(key) not in (None, "", []) and str(previous.get(key)) != str(value):
+    return True
+```
+
+이전 값이 있고 이번 값과 다르면 변경으로 봅니다. 예를 들어 이전 질문이 `오늘`이고 다음 질문이 `어제`면 `date`가 바뀐 것입니다.
+
+```python
+return False
+```
+
+명시 변경이 없으면 기존 required param 상속이 가능합니다.
+
+## 추가 함수 코드 단위 해석: `_normalize_plan`의 follow-up 판별
+
+```python
+followup_like = _contains_any(question, ["그 결과", "이 결과", "현재 결과", "그중", "그 중", "여기서", "방금", ...])
+```
+
+사용자가 이전 결과를 가리키는 표현을 썼는지 확인합니다.
+
+```python
+query_mode = "followup_transform" if _has_current_data(state) and followup_like and not explicit_fresh else "retrieval"
+```
+
+현재 데이터가 있고, 질문이 이전 결과를 가리키며, 새로 조회하라는 표현이 없으면 후속 분석으로 판단합니다.
+
+```python
+if query_mode == "followup_transform" and (required_changed or not _filters_within_current_scope(state, filters, column_filters)):
+    query_mode = "retrieval"
+```
+
+핵심 안전장치입니다. 날짜 같은 필수 조건이 바뀌거나 새 필터가 현재 데이터 범위를 벗어나면 후속 분석이 아니라 신규 조회로 바꿉니다.
+
+```python
+route = "followup_transform" if query_mode == "followup_transform" else ("multi_retrieval" if len(jobs) > 1 else "single_retrieval")
+```
+
+최종적으로 router가 사용할 route를 결정합니다.

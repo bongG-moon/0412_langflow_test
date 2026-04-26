@@ -278,3 +278,58 @@ return {"prompt_payload": {...}}
 ```
 
 prompt 문자열만 반환하지 않고 state/domain/catalog/filter context도 함께 반환합니다. 다음 `Normalize Intent Plan`이 LLM 결과를 보정할 때 이 context를 다시 사용하기 때문입니다.
+
+## 추가 함수 코드 단위 해석: `_current_data_summary`
+
+이 함수는 이전 턴의 `current_data`를 prompt에 넣기 좋은 요약 정보로 줄입니다.
+
+```python
+rows = current.get("data") if isinstance(current.get("data"), list) else []
+data_ref = current.get("data_ref") if isinstance(current.get("data_ref"), dict) else {}
+```
+
+현재 데이터가 payload 안에 직접 들어 있는 경우와 MongoDB reference로 빠져 있는 경우를 모두 처리합니다.
+
+```python
+columns = list(rows[0].keys()) if rows and isinstance(rows[0], dict) else data_ref.get("columns", [])
+```
+
+row가 있으면 첫 row의 key를 컬럼 목록으로 사용하고, row가 preview 없이 ref만 있으면 `data_ref.columns`를 사용합니다.
+
+```python
+"has_current_data": bool(rows) or bool(data_ref),
+"current_row_count": current.get("row_count") or data_ref.get("row_count") or len(rows),
+```
+
+후속 질문 판단에 필요한 현재 데이터 존재 여부와 전체 row 수를 계산합니다.
+
+```python
+"current_source_required_params": current.get("source_required_params", current.get("retrieval_applied_params", {})),
+"current_source_filters": current.get("source_filters", {}),
+"current_source_column_filters": current.get("source_column_filters", {}),
+```
+
+이전 조회에 적용된 required param과 filter를 prompt에 전달합니다. 그래서 LLM이 "어제 WB공정은?" 같은 질문이 신규 조회인지 판단하는 근거를 갖습니다.
+
+## 추가 함수 코드 단위 해석: `_unwrap_main_flow_filters`
+
+이 함수는 Main Flow Filters Loader 출력에서 실제 설정 dict만 꺼냅니다.
+
+```python
+payload = _payload_from_value(value)
+```
+
+Langflow Data 객체나 dict 입력을 일반 payload로 바꿉니다.
+
+```python
+if isinstance(payload.get("main_flow_filters_payload"), dict):
+    payload = payload["main_flow_filters_payload"]
+```
+
+Loader 출력처럼 `main_flow_filters_payload`로 감싸진 경우 내부로 한 단계 들어갑니다.
+
+```python
+return payload.get("main_flow_filters") if isinstance(payload.get("main_flow_filters"), dict) else payload
+```
+
+최종적으로 `main_flow_filters` dict를 반환합니다. 이미 dict 자체가 들어온 경우도 그대로 사용할 수 있게 합니다.

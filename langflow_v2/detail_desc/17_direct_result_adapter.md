@@ -172,3 +172,50 @@ rows = first.get("data") if isinstance(first.get("data"), list) else []
 ```
 
 다음 턴에서 이어서 질문할 때 필요한 조회 조건과 필터 계획을 결과 안에 보존합니다.
+
+## 추가 함수 코드 단위 해석: `adapt_direct_result`의 성공/실패 source 선택
+
+```python
+source_results = [item for item in retrieval.get("source_results", []) if isinstance(item, dict)] if isinstance(retrieval.get("source_results"), list) else []
+failed = [item for item in source_results if not item.get("success")]
+valid = [item for item in source_results if item.get("success")]
+```
+
+조회 결과 목록에서 성공 source와 실패 source를 나눕니다.
+
+```python
+first = valid[0] if valid else (failed[0] if failed else {})
+```
+
+성공 결과가 있으면 첫 번째 성공 결과를 사용합니다. 성공 결과가 없으면 첫 실패 결과를 사용해 오류 메시지를 전달합니다.
+
+```python
+success = bool(valid) and not failed
+```
+
+성공 source가 있고 실패 source가 하나도 없을 때만 전체 direct result를 성공으로 봅니다.
+
+```python
+summary = first.get("summary") or (f"retrieved rows: {len(rows)}" if rows else "No source data is available.")
+```
+
+source summary가 있으면 사용하고, 없으면 row 수 기반 기본 summary를 만듭니다.
+
+## 추가 함수 코드 단위 해석: `adapt_direct_result`의 후속 질문용 metadata 보존
+
+```python
+"source_dataset_keys": [str(item.get("dataset_key")) for item in source_results if item.get("dataset_key")],
+"current_datasets": retrieval.get("current_datasets", {}),
+"source_snapshots": retrieval.get("source_snapshots", []),
+```
+
+다음 턴에서 현재 데이터의 출처와 컬럼 범위를 판단할 수 있도록 dataset 관련 metadata를 보존합니다.
+
+```python
+"retrieval_applied_params": plan.get("required_params", {}) if isinstance(plan, dict) else {},
+"retrieval_applied_filters": plan.get("filters", {}) if isinstance(plan, dict) else {},
+"retrieval_applied_column_filters": plan.get("column_filters", {}) if isinstance(plan, dict) else {},
+"filter_plan": plan.get("filter_plan", []) if isinstance(plan, dict) else [],
+```
+
+이 값들이 `Final Answer Builder`를 거쳐 `next_state.context.last_*`와 `current_data`에 저장됩니다. 그래서 후속 질문에서 필터 상속과 신규 조회 판단이 가능합니다.

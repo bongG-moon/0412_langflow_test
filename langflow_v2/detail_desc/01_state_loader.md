@@ -234,3 +234,60 @@ state = {
 ```
 
 이번 턴의 질문을 state 안에 저장합니다. 뒤의 prompt builder와 final answer builder가 이 값을 참고합니다.
+
+## 추가 함수 코드 단위 해석: `_session_id_from_value`
+
+이 함수는 Chat Input 또는 Message 객체 안에서 세션 식별자를 최대한 찾아냅니다. 같은 사용자의 후속 질문을 같은 state 흐름으로 묶기 위해 필요합니다.
+
+```python
+payload = _payload_from_value(value)
+```
+
+먼저 입력값을 dict 형태로 정리합니다. Langflow Data 객체라면 `.data` 안의 값을 사용합니다.
+
+```python
+for source in (payload, payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}, payload.get("properties") if isinstance(payload.get("properties"), dict) else {}):
+```
+
+session id가 payload 최상위에 있을 수도 있고, `metadata`나 `properties` 안에 들어 있을 수도 있어서 세 위치를 모두 확인합니다.
+
+```python
+for key in ("session_id", "sessionId", "chat_id", "chatId", "conversation_id", "conversationId"):
+    if source.get(key):
+        return str(source[key]).strip()
+```
+
+여러 서비스에서 쓰는 세션 key 이름을 모두 허용합니다. 찾는 즉시 문자열로 변환해 반환합니다.
+
+```python
+for attr in ("session_id", "sessionId", "chat_id", "chatId", "conversation_id", "conversationId"):
+    item = getattr(value, attr, None)
+```
+
+dict가 아니라 Message 객체 속성에 세션 id가 붙는 경우도 처리합니다.
+
+## 추가 함수 코드 단위 해석: `_as_dict_state`
+
+이 함수는 이전 state 입력을 항상 dict로 바꿉니다.
+
+```python
+state = payload.get("state") or payload.get("agent_state")
+if isinstance(state, dict):
+    return deepcopy(state)
+```
+
+가장 일반적인 `{"state": {...}}` 구조를 먼저 처리합니다. `deepcopy`를 사용해 이후 노드에서 원본 입력을 직접 변경하지 않게 합니다.
+
+```python
+if isinstance(payload.get("state_json"), str):
+    parsed = json.loads(payload["state_json"])
+    return parsed if isinstance(parsed, dict) else {}
+```
+
+state가 JSON 문자열로 저장된 경우 다시 dict로 복원합니다.
+
+```python
+return deepcopy(payload) if payload else {}
+```
+
+입력 payload 자체가 이미 state처럼 생긴 dict일 수도 있으므로, 마지막 fallback으로 payload 전체를 state로 사용합니다.

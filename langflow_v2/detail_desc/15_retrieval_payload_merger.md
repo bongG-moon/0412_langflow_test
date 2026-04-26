@@ -189,3 +189,46 @@ return {
 ```
 
 모든 branch가 비어 있거나 skipped라면 downstream이 안전하게 멈출 수 있도록 skipped payload를 반환합니다.
+
+## 추가 함수 코드 단위 해석: `_retrieval_payload`
+
+```python
+payload = _payload_from_value(value)
+return payload.get("retrieval_payload") if isinstance(payload.get("retrieval_payload"), dict) else payload
+```
+
+retriever 출력은 보통 `{"retrieval_payload": {...}}`로 감싸져 있습니다. 이 함수는 wrapper가 있으면 내부 payload를 꺼내고, 이미 payload 자체가 들어온 경우 그대로 반환합니다.
+
+## 추가 함수 코드 단위 해석: `merge_retrieval_payloads`의 후보 순서
+
+```python
+candidates = [
+    ("single_retrieval", _retrieval_payload(single_retrieval_value)),
+    ("multi_retrieval", _retrieval_payload(multi_retrieval_value)),
+    ("followup_transform", _retrieval_payload(followup_retrieval_value)),
+]
+```
+
+세 branch 입력을 같은 형식으로 만든 뒤 정해진 순서로 검사합니다.
+
+```python
+if retrieval.get("skipped"):
+    skipped.append({"source": source, "skip_reason": retrieval.get("skip_reason", "")})
+    continue
+```
+
+선택되지 않은 branch는 기록만 남기고 건너뜁니다.
+
+```python
+merged = deepcopy(retrieval)
+merged["merged_from"] = source
+```
+
+처음 발견한 active retrieval payload를 복사하고, 어느 branch에서 왔는지 `merged_from`으로 표시합니다.
+
+```python
+if skipped:
+    merged["skipped_retrieval_branches"] = skipped
+```
+
+디버깅을 위해 앞에서 skipped된 branch 정보도 같이 싣습니다.

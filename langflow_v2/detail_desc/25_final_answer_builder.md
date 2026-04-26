@@ -219,3 +219,91 @@ final_result = {
 ```
 
 화면 출력, API 응답, state 저장에 필요한 값을 하나의 final payload로 묶습니다.
+
+## 추가 함수 코드 단위 해석: `_build_final_data`
+
+최종 결과에 표시할 데이터와 data_ref 정보를 정리하는 함수입니다.
+
+```python
+display_rows = _safe_rows(rows, 0)
+is_preview = bool(data_ref) or row_count > len(display_rows)
+```
+
+현재 구현에서는 display rows를 모두 담되, data_ref가 있거나 전체 row 수가 표시 row 수보다 많으면 preview로 표시합니다.
+
+```python
+final_data = {
+    "rows": display_rows,
+    "row_count": row_count,
+    "display_row_limit": "all",
+    "displayed_row_count": len(display_rows),
+    "columns": _rows_columns(display_rows),
+```
+
+화면이나 API에서 바로 읽을 수 있도록 rows, 전체 건수, 표시 건수, 컬럼 목록을 넣습니다.
+
+```python
+if data_ref:
+    final_data["data_ref"] = deepcopy(data_ref)
+    final_data["data_is_reference"] = True
+```
+
+큰 데이터가 MongoDB로 빠져 있으면 참조 정보도 함께 유지합니다.
+
+## 추가 함수 코드 단위 해석: `_build_answer_message`
+
+```python
+rows = final_data.get("rows") if isinstance(final_data.get("rows"), list) else []
+if not rows:
+    return response
+```
+
+표시할 row가 없으면 자연어 답변만 반환합니다.
+
+```python
+count_text = f"총 {row_count}건" if row_count == displayed else f"전체 {row_count}건 중 {displayed}건 표시"
+```
+
+전체 row 수와 화면에 표시되는 row 수가 다를 때 사용자에게 명확히 알려줍니다.
+
+```python
+parts = [
+    response,
+    "",
+    "### 최종 데이터",
+    "",
+    count_text,
+    "",
+    table,
+]
+```
+
+자연어 답변과 markdown table을 하나의 Chat Output 메시지로 합칩니다.
+
+## 추가 함수 코드 단위 해석: `build_final_answer`의 state context 갱신
+
+```python
+chat_history = [*chat_history, {"role": "user", "content": user_question}, {"role": "assistant", "content": response}]
+next_state["chat_history"] = chat_history[-20:]
+```
+
+이번 턴의 사용자 질문과 assistant 답변을 chat history에 추가하고 최근 20개만 유지합니다.
+
+```python
+context.update({
+    "last_intent": plan,
+    "last_retrieval_plan": {"route": plan.get("route"), "jobs": plan.get("retrieval_jobs", [])},
+    "last_required_params": plan.get("required_params", extracted_params),
+    "last_filters": plan.get("filters", {}),
+    "last_column_filters": plan.get("column_filters", {}),
+    "last_filter_plan": plan.get("filter_plan", []),
+})
+```
+
+후속 질문에서 조건을 상속하거나 신규 조회로 전환할지 판단하는 핵심 값들을 context에 저장합니다.
+
+```python
+next_state["current_data"] = current_data
+```
+
+성공한 분석 결과를 다음 턴의 현재 데이터로 저장합니다. "그중", "이 결과" 같은 질문은 이 값을 기반으로 처리됩니다.

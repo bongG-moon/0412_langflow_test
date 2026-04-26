@@ -164,3 +164,43 @@ return {"analysis_result": selected}
 ```
 
 뒤쪽 노드가 하나의 결과만 받도록 표준 payload로 반환합니다.
+
+## 추가 함수 코드 단위 해석: `merge_analysis_results`의 우선순위
+
+```python
+candidates = [
+    ("early_result", _analysis_result(early_result_value)),
+    ("direct_result", _analysis_result(direct_result_value)),
+    ("pandas_result", _analysis_result(pandas_result_value)),
+]
+```
+
+세 branch 결과를 같은 형식으로 만든 뒤 정해진 순서대로 검사합니다. 실제 flow에서는 보통 하나만 active입니다.
+
+```python
+if not isinstance(result, dict) or not result:
+    continue
+```
+
+비어 있는 입력은 무시합니다.
+
+```python
+if result.get("skipped"):
+    skipped.append({"source": source, "skip_reason": result.get("skip_reason", "")})
+    continue
+```
+
+선택되지 않은 branch는 skipped 목록에만 기록하고 다음 후보를 봅니다.
+
+```python
+merged = deepcopy(result)
+merged["merged_from"] = source
+```
+
+선택된 결과를 복사하고 어느 branch에서 왔는지 표시합니다.
+
+```python
+return {"analysis_result": merged}
+```
+
+뒤쪽 final answer 노드들은 branch 종류를 몰라도 `analysis_result` 하나만 읽으면 됩니다.

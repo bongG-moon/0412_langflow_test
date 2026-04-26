@@ -214,3 +214,54 @@ return {
 ```
 
 응답을 파싱하지 않고 text 그대로 반환합니다. 이 구조 덕분에 Intent, Pandas, Answer 단계가 같은 caller를 재사용할 수 있습니다.
+
+## 추가 함수 코드 단위 해석: `_load_llm`
+
+이 함수는 실제 LangChain chat model 객체를 생성합니다.
+
+```python
+module = import_module("langchain_google_genai")
+```
+
+Google Gemini용 LangChain 패키지를 런타임에 import합니다. 노드 파일 import 시점에 패키지가 없어도, 실제 LLM 호출을 할 때만 문제가 드러나게 하기 위한 구조입니다.
+
+```python
+return module.ChatGoogleGenerativeAI(
+    api_key=llm_api_key,
+    model=model_name,
+    temperature=temperature,
+    convert_system_message_to_human=True,
+)
+```
+
+API key, model name, temperature를 사용해 ChatGoogleGenerativeAI를 생성합니다. `convert_system_message_to_human=True`는 일부 Gemini 모델에서 system message 처리를 맞추기 위한 옵션입니다.
+
+```python
+# OpenAI-compatible deployment example:
+# from langchain_openai import ChatOpenAI
+# return ChatOpenAI(api_key=llm_api_key, model=model_name, temperature=temperature)
+```
+
+OpenAI 호환 모델을 사용할 경우 이 부분처럼 `ChatOpenAI`로 바꿔 사용할 수 있습니다. 현재 기본 구현은 Google GenAI 기준입니다.
+
+## 추가 함수 코드 단위 해석: `call_llm_json`의 skipped 처리
+
+```python
+if prompt_payload.get("skipped"):
+    return {"llm_result": {"skipped": True, ...}}
+```
+
+앞쪽 router에서 선택되지 않은 branch가 들어온 경우 LLM을 호출하지 않습니다. 이 처리가 없으면 비활성 branch도 API를 호출해 비용과 오류가 생길 수 있습니다.
+
+```python
+if str(llm_api_key or "").strip():
+```
+
+API key가 있을 때만 실제 LLM을 호출합니다. key가 비어 있으면 빈 `llm_text`와 오류 목록만 반환하므로, 뒤 normalizer가 heuristic fallback을 사용할 수 있습니다.
+
+```python
+if not selected_model:
+    errors.append("Model Name is required when LLM API Key is set.")
+```
+
+API key는 있는데 model name이 비어 있으면 호출하지 않고 오류를 남깁니다.

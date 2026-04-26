@@ -187,3 +187,78 @@ return {"success": True, "data": rows, "columns": [str(column) for column in mer
 ```
 
 병합 결과를 다시 list[dict] 형태로 바꿔 prompt payload에 넣습니다.
+
+## 추가 함수 코드 단위 해석: `_build_prompt`
+
+이 함수는 pandas code LLM에게 전달할 실제 prompt 문자열을 만듭니다.
+
+```python
+return f"""You are writing safe pandas code for a manufacturing data assistant.
+Return JSON only.
+```
+
+LLM의 역할과 응답 형식을 먼저 고정합니다. 여기서는 자연어 설명이 아니라 JSON만 반환하도록 요구합니다.
+
+```python
+- A pandas DataFrame named df already exists.
+- Use only existing columns.
+- Assign the final DataFrame to a variable named result.
+```
+
+executor가 제공하는 실행 환경을 명확히 알려줍니다. 특히 최종 결과 변수 이름을 `result`로 고정해야 `Pandas Analysis Executor`가 결과를 꺼낼 수 있습니다.
+
+```python
+- Do not import modules, read files, open sockets, or use eval/exec.
+```
+
+LLM이 위험한 코드를 만들지 않도록 prompt 단계에서도 제한을 알려줍니다. 실제 실행 전에는 executor의 `_validate_code`가 한 번 더 막습니다.
+
+```python
+Intent plan:
+{json.dumps(plan, ensure_ascii=False, default=str, indent=2)}
+```
+
+group_by, sort, top_n, filters 같은 분석 의도를 prompt에 넣습니다.
+
+```python
+Available columns:
+{json.dumps(columns, ensure_ascii=False)}
+```
+
+LLM이 존재하지 않는 컬럼을 만들지 않도록 실제 사용 가능한 컬럼 목록을 제공합니다.
+
+```python
+Data preview:
+{json.dumps(rows[:5], ensure_ascii=False, default=str, indent=2)}
+```
+
+전체 데이터를 넣지 않고 앞 5개 row만 보여줍니다. token을 줄이면서도 데이터 형태를 이해시키기 위한 선택입니다.
+
+## 추가 함수 코드 단위 해석: `_domain_from_payload`
+
+```python
+if isinstance(payload.get("domain_payload"), dict):
+    payload = payload["domain_payload"]
+```
+
+Domain Loader 출력처럼 감싸진 구조면 내부 payload로 들어갑니다.
+
+```python
+if isinstance(payload.get("domain"), dict):
+    return deepcopy(payload["domain"])
+```
+
+정상 domain payload이면 실제 domain dict를 반환합니다.
+
+```python
+if any(key in payload for key in ("products", "process_groups", "terms", "metrics", "join_rules")):
+    return deepcopy(payload)
+```
+
+domain dict 자체가 바로 들어온 경우도 허용합니다.
+
+```python
+return {"products": {}, "process_groups": {}, "terms": {}, "datasets": {}, "metrics": {}, "join_rules": []}
+```
+
+domain이 없더라도 뒤 prompt 생성이 실패하지 않도록 빈 domain 구조를 반환합니다.

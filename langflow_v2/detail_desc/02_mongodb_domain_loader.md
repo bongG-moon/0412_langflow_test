@@ -216,3 +216,50 @@ domain["metrics"]["achievement_rate"] = {...}
 ```
 
 `setdefault(gbn, {})`는 `domain`에 아직 `metrics` key가 없을 때 자동으로 빈 dict를 만들어 주는 코드입니다.
+
+## 추가 함수 코드 단위 해석: `_load_domain_from_mongo`
+
+이 함수는 MongoDB에서 domain 문서를 조회하고, 조회된 여러 문서를 하나의 domain payload로 병합합니다.
+
+```python
+errors: list[str] = []
+domain = _empty_domain()
+docs: list[Dict[str, Any]] = []
+```
+
+오류 목록, 기본 domain 구조, 원본 문서 목록을 먼저 준비합니다. MongoDB 조회가 실패해도 빈 domain payload를 반환할 수 있게 하기 위한 초기값입니다.
+
+```python
+mongo_client_cls = getattr(import_module("pymongo"), "MongoClient")
+client = mongo_client_cls(mongo_uri, serverSelectionTimeoutMS=5000)
+```
+
+`pymongo`를 런타임에 import합니다. Langflow 환경에 pymongo가 설치되어 있지 않아도 파일 import 자체가 실패하지 않도록 하기 위한 방식입니다.
+
+```python
+query = {"status": status} if status else {}
+cursor = client[db_name][collection_name].find(query).limit(limit)
+```
+
+`domain_status`가 있으면 해당 상태만 조회하고, 비어 있으면 전체 문서를 조회합니다. `limit`으로 너무 많은 문서를 한 번에 읽는 것을 막습니다.
+
+```python
+docs = [dict(item) for item in cursor]
+for doc in docs:
+    _merge_item(domain, doc)
+```
+
+MongoDB cursor 결과를 dict로 바꾸고, 각 문서를 `_merge_item`으로 domain에 누적합니다.
+
+```python
+except Exception as exc:
+    errors.append(str(exc))
+```
+
+MongoDB 연결 실패, 인증 실패, collection 없음 같은 문제는 flow를 중단하지 않고 `domain_errors`에 기록합니다.
+
+```python
+"raw_documents": _json_safe(docs[:20])
+```
+
+디버깅을 위해 원본 문서 일부를 남기되, JSON 직렬화 가능한 형태로 정리합니다.

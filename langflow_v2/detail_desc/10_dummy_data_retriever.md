@@ -329,3 +329,94 @@ source_results = [_run_job(job) for job in jobs if isinstance(job, dict)]
 ```
 
 후속 질문에서 다시 쓸 수 있도록 현재 조회 결과의 dataset별 요약과 snapshot을 함께 만듭니다.
+
+## 추가 함수 코드 단위 해석: `_apply_column_filters`
+
+이 함수는 `main_flow_filters`에 정의되지 않았지만 실제 테이블 컬럼으로 들어온 조건을 dummy row에 적용합니다.
+
+```python
+if not isinstance(column_filters, dict) or not column_filters:
+    return rows
+```
+
+컬럼 필터가 없으면 원본 rows를 그대로 반환합니다.
+
+```python
+for row in rows:
+    keep = True
+    for column, expected in column_filters.items():
+```
+
+각 row마다 모든 column filter 조건을 검사합니다.
+
+```python
+if column in row and not _matches(row.get(column), expected):
+    keep = False
+    break
+```
+
+해당 컬럼이 row에 있고 값이 기대 조건과 맞지 않으면 row를 제외합니다. 컬럼이 없는 경우에는 dummy dataset마다 컬럼 구성이 다를 수 있으므로 강제로 실패 처리하지 않습니다.
+
+```python
+if keep:
+    filtered.append(row)
+```
+
+모든 조건을 통과한 row만 결과에 남깁니다.
+
+## 추가 함수 코드 단위 해석: `_base_rows`
+
+dummy 데이터셋의 공통 기본 row를 만드는 함수입니다.
+
+```python
+work_date = _normalize_yyyymmdd(params.get("date"))
+random.seed(_stable_seed(work_date, offset))
+```
+
+날짜를 `YYYYMMDD`로 맞추고, 날짜와 offset 기반 seed를 사용합니다. 같은 날짜와 dataset이면 매번 같은 dummy 값이 나오도록 하기 위한 구조입니다.
+
+```python
+rows = [{"WORK_DT": work_date, **process, **product} for process in PROCESSES for product in PRODUCTS]
+```
+
+공정 목록과 제품 목록을 조합해 제조 현장 데이터처럼 보이는 기본 row grid를 만듭니다.
+
+```python
+return _apply_filters(rows, params)
+```
+
+process, mode, line, den, tech, mcp_no 같은 표준 조건을 적용합니다.
+
+## 추가 함수 코드 단위 해석: `_run_job`
+
+```python
+tool_name = str(job.get("tool_name") or job.get("dataset_key") or "")
+tool = TOOL_REGISTRY.get(tool_name) or TOOL_REGISTRY.get(str(job.get("dataset_key") or ""))
+```
+
+retrieval job에서 실행할 dummy tool을 찾습니다. `tool_name`으로 못 찾으면 `dataset_key`로 한 번 더 찾습니다.
+
+```python
+params = deepcopy(job.get("params", {}))
+params.update({key: value for key, value in (job.get("filters") or {}).items() if value not in (None, "", [])})
+```
+
+required params와 semantic filters를 하나의 params dict로 합칩니다. dummy tool 함수들은 이 params를 기준으로 row를 만듭니다.
+
+```python
+result = tool(params)
+```
+
+선택된 dummy 데이터 생성 함수를 실행합니다.
+
+```python
+result["data"] = _apply_column_filters(result.get("data", []), job.get("column_filters", {}))
+```
+
+semantic filter 이후 실제 컬럼명 기반 조건을 추가로 적용합니다.
+
+```python
+result["filter_plan"] = deepcopy(job.get("filter_plan", []))
+```
+
+후속 질문과 pandas executor가 어떤 필터가 적용됐는지 알 수 있도록 filter plan을 결과에 보존합니다.

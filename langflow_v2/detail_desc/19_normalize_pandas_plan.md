@@ -167,3 +167,71 @@ analysis_plan = {**raw_plan, "code": code, "source": "llm" if raw_plan.get("code
 ```
 
 코드가 LLM에서 온 것인지 fallback인지 표시합니다. 이 값은 나중에 실행 결과의 `analysis_logic`으로 이어집니다.
+
+## 추가 함수 코드 단위 해석: `_fallback_code`
+
+LLM이 pandas code를 주지 못했을 때 사용할 기본 코드를 만드는 함수입니다.
+
+```python
+group_by = [column for column in _as_list(plan.get("group_by")) if str(column) in columns]
+```
+
+intent plan의 group_by 중 실제 컬럼에 존재하는 값만 사용합니다.
+
+```python
+numeric_priority = ["production", "target", "achievement_rate", "wip_qty", ...]
+numeric_cols = [column for column in numeric_priority if column in columns]
+```
+
+제조 데이터에서 자주 쓰는 numeric metric 컬럼을 우선순위대로 찾습니다.
+
+```python
+if sort_column:
+    suffix += f"\nif {sort_column!r} in result.columns:\n    result = result.sort_values({sort_column!r}, ascending={ascending!r})"
+```
+
+정렬 요청이 있으면 결과 DataFrame에 해당 컬럼이 있을 때만 정렬하도록 안전한 코드를 붙입니다.
+
+```python
+if "production" in columns and "target" in columns:
+```
+
+생산량과 목표가 함께 있으면 달성률 계산 코드를 우선 생성합니다.
+
+```python
+result['achievement_rate'] = None
+mask = result['target'].notna() & (result['target'] != 0)
+result.loc[mask, 'achievement_rate'] = result.loc[mask, 'production'] / result.loc[mask, 'target'] * 100
+```
+
+target이 0이거나 null인 경우 나눗셈 오류가 나지 않도록 mask를 적용합니다.
+
+```python
+return "result = df.copy()" + suffix
+```
+
+집계할 숫자 컬럼을 찾지 못하면 원본 table을 그대로 반환하는 pass-through 코드를 만듭니다.
+
+## 추가 함수 코드 단위 해석: `normalize_pandas_plan`의 source 결정
+
+```python
+if not plan.get("needs_pandas", True):
+    code = "result = df.copy()"
+    source = "direct_table"
+```
+
+intent plan상 pandas 분석이 필요 없으면 DataFrame을 그대로 반환하는 코드로 고정합니다.
+
+```python
+elif not code:
+    code = _fallback_code(plan if isinstance(plan, dict) else {}, columns)
+    source = "fallback"
+```
+
+LLM 응답에 code가 없으면 deterministic fallback code를 사용합니다.
+
+```python
+"warnings": _unique_strings([*_as_list(raw_plan.get("warnings") if isinstance(raw_plan, dict) else []), *warnings])
+```
+
+LLM 파싱 오류나 LLM이 직접 준 경고를 중복 제거해서 보존합니다.

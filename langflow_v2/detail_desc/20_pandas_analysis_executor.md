@@ -192,3 +192,104 @@ result = local_vars.get("result")
 ```
 
 생성된 코드는 반드시 `result` 변수에 최종 DataFrame을 넣어야 합니다.
+
+## 추가 함수 코드 단위 해석: `_validate_code`
+
+LLM이 만든 pandas 코드를 실행하기 전에 AST 기준으로 검사하는 함수입니다.
+
+```python
+tree = ast.parse(code)
+```
+
+코드를 문자열로 바로 실행하지 않고 먼저 Python AST로 파싱합니다. 문법 오류가 있으면 여기서 실패합니다.
+
+```python
+if isinstance(node, (ast.Import, ast.ImportFrom, ast.With, ast.Try, ast.While, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda, ast.Delete)):
+    return False, f"Forbidden Python node: {type(node).__name__}"
+```
+
+import, class, try, while 같은 복잡하거나 위험도가 높은 문법을 금지합니다. 분석용 짧은 pandas 코드만 허용하려는 목적입니다.
+
+```python
+if isinstance(node, ast.Name) and node.id in FORBIDDEN_NAMES:
+    return False, f"Forbidden Python name: {node.id}"
+```
+
+`open`, `eval`, `exec`, `os`, `subprocess` 같은 이름을 사용할 수 없게 합니다.
+
+```python
+if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
+    return False, "Dunder attribute access is forbidden."
+```
+
+`__class__`, `__dict__` 같은 dunder 접근을 막습니다.
+
+```python
+if isinstance(node, ast.Assign):
+    has_result = has_result or any(isinstance(target, ast.Name) and target.id == "result" for target in node.targets)
+```
+
+최종 결과를 `result` 변수에 대입하는지 확인합니다.
+
+## 추가 함수 코드 단위 해석: `_apply_filter_plan`
+
+이 함수는 semantic filter와 column filter를 pandas DataFrame에 실제로 적용합니다.
+
+```python
+for item in filter_plan:
+    columns = [str(column) for column in _as_list(item.get("columns")) if str(column) in frame.columns]
+```
+
+filter plan에 적힌 실제 컬럼 중 현재 DataFrame에 존재하는 컬럼만 사용합니다.
+
+```python
+for column, values in column_filters.items():
+    if str(column) in frame.columns:
+        conditions.append((str(column), [str(column)], values))
+```
+
+사용자가 실제 컬럼명으로 요청한 column filter도 조건 목록에 추가합니다.
+
+```python
+signature = json.dumps([field, columns, values], ensure_ascii=False, default=str)
+if signature in seen:
+    continue
+```
+
+같은 조건이 filter plan과 column filters에 중복으로 들어와도 한 번만 적용합니다.
+
+```python
+mask = mask | series.eq(normalized_value) | series.str.contains(normalized_value, regex=False, na=False)
+```
+
+완전 일치와 부분 포함을 모두 허용합니다. 예를 들어 `D/A`가 `D/A1`에 포함되는 경우도 잡을 수 있습니다.
+
+```python
+notes.append(f"filter {field}: {before}->{len(frame)}")
+```
+
+필터 적용 전후 row 수를 기록해 최종 결과에서 어떤 필터가 적용됐는지 확인할 수 있게 합니다.
+
+## 추가 함수 코드 단위 해석: `execute_pandas_analysis`의 fallback 재시도
+
+```python
+executed = _execute_code(code, rows, plan)
+if not executed.get("success") and analysis_logic == "llm":
+```
+
+LLM 코드 실행이 실패했고 그 코드가 LLM에서 온 경우에만 fallback 재시도를 합니다.
+
+```python
+primary_error = executed.get("error_message", "")
+fallback = _fallback_code(plan, [str(column) for column in columns])
+executed = _execute_code(fallback, rows, plan)
+```
+
+실패 원인을 보존한 뒤 deterministic fallback code를 생성해 다시 실행합니다.
+
+```python
+if executed.get("success"):
+    analysis_plan = {**analysis_plan, "code": fallback, "source": "fallback_after_error", "warnings": [*_as_list(analysis_plan.get("warnings")), primary_error]}
+```
+
+fallback이 성공하면 최종 analysis plan에 원래 오류를 warning으로 남깁니다.

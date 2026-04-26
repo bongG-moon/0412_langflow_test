@@ -218,3 +218,73 @@ if not selected:
 ```
 
 이전 state를 찾지 못해도 뒤 노드가 깨지지 않도록 빈 state를 만들어 반환합니다.
+
+## 추가 함수 코드 단위 해석: `_collect_texts`
+
+Message History 출력은 Langflow 버전이나 연결 방식에 따라 문자열, Message 객체, Data 객체, list, dict 안의 `messages` 등 여러 모양으로 들어올 수 있습니다. 이 함수는 그런 다양한 입력에서 state를 찾을 후보 텍스트를 모두 수집합니다.
+
+```python
+if depth > 8 or value is None:
+    return []
+```
+
+중첩 구조가 너무 깊어질 때 무한 재귀를 막습니다. memory payload 안에 다시 payload가 들어가는 구조가 생겨도 8단계까지만 탐색합니다.
+
+```python
+if isinstance(value, (list, tuple, set)):
+    texts: list[str] = []
+    for item in value:
+        texts.extend(_collect_texts(item, depth + 1))
+    return texts
+```
+
+Message History가 여러 메시지 목록으로 들어오면 각 항목을 다시 `_collect_texts`로 처리해 모든 텍스트를 평평한 list로 만듭니다.
+
+```python
+for key in ("messages", "data", "rows", "records", "items", "result", "value"):
+    nested = payload.get(key) if isinstance(payload, dict) else None
+    if nested is not None and nested is not payload:
+        texts.extend(_collect_texts(nested, depth + 1))
+```
+
+Langflow Data payload에서 자주 쓰이는 key를 순서대로 확인합니다. `nested is not payload` 조건은 자기 자신을 다시 탐색하는 재귀 루프를 피하기 위한 안전장치입니다.
+
+```python
+text = _text_from_value(value)
+if text:
+    texts.append(text)
+```
+
+마지막으로 현재 객체 자체에서 text/content/message 속성을 꺼내 후보에 추가합니다.
+
+## 추가 함수 코드 단위 해석: `_json_objects_from_text`
+
+state memory message는 일반 텍스트 안에 JSON 문자열이 섞인 형태일 수 있습니다. 이 함수는 텍스트 중간에 있는 JSON object들을 가능한 만큼 찾아냅니다.
+
+```python
+decoder = json.JSONDecoder()
+objects: list[Dict[str, Any]] = []
+```
+
+표준 JSON decoder를 직접 사용합니다. `json.loads`는 전체 문자열이 JSON이어야 하지만, `raw_decode`는 특정 위치에서 시작하는 JSON만 읽을 수 있습니다.
+
+```python
+for index, char in enumerate(text):
+    if char != "{":
+        continue
+```
+
+JSON object가 시작될 수 있는 `{` 위치만 검사합니다.
+
+```python
+parsed, _ = decoder.raw_decode(text[index:])
+```
+
+해당 위치부터 JSON object 파싱을 시도합니다. 실패하면 다음 `{` 위치를 계속 검사합니다.
+
+```python
+if isinstance(parsed, dict):
+    objects.append(parsed)
+```
+
+state record는 dict 구조여야 하므로 list나 scalar JSON은 제외합니다.
