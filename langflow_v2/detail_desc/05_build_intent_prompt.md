@@ -63,3 +63,168 @@ Build Intent Prompt.prompt_payload
 -> LLM JSON Caller (Intent).prompt_payload
 ```
 
+## Python 코드 상세 해석
+
+### 입력 예시
+
+```json
+{
+  "state_payload": {
+    "user_question": "어제 WB공정 생산달성률을 mode별로 알려줘",
+    "state": {
+      "session_id": "abc",
+      "current_data": null
+    }
+  },
+  "domain_payload": {
+    "domain": {
+      "metrics": {
+        "achievement_rate": {
+          "aliases": ["달성률"],
+          "required_datasets": ["production", "wip"]
+        }
+      }
+    }
+  },
+  "table_catalog_payload": {
+    "table_catalog": {
+      "datasets": {
+        "production": {"keywords": ["생산"]},
+        "wip": {"keywords": ["재공"]}
+      }
+    }
+  }
+}
+```
+
+### 출력 예시
+
+```json
+{
+  "prompt_payload": {
+    "prompt": "You are an intent planner...\nReturn JSON only...",
+    "state": {"session_id": "abc"},
+    "domain": {"metrics": {"achievement_rate": "..."}},
+    "table_catalog": {"datasets": {"production": "..."}},
+    "reference_date": "2026-04-26"
+  }
+}
+```
+
+### 핵심 함수별 해석
+
+| 함수 | 입력 예시 | 출력 예시 | 왜 이 코드가 필요한가 |
+| --- | --- | --- | --- |
+| `_unwrap_state` | `{"state_payload": {"state": {...}}}` | `{"state": {...}, "user_question": "..."}` | 앞 노드 출력이 한 겹 감싸져 있어도 실제 state를 꺼냅니다. |
+| `_unwrap_domain` | `{"domain_payload": {"domain": {...}}}` | `{"metrics": {...}}` | prompt에 넣을 domain dict만 추출합니다. |
+| `_unwrap_catalog` | `{"table_catalog_payload": {"table_catalog": {...}}}` | `{"datasets": {...}}` | prompt에 넣을 dataset 설명만 추출합니다. |
+| `_current_data_summary` | `{"rows": [{"A": 1}]}` | `{"row_count": 1, "columns": ["A"]}` | 후속 질문 판단에 필요한 현재 데이터 요약만 만듭니다. 전체 row를 prompt에 많이 넣지 않기 위함입니다. |
+| `build_intent_prompt` | state/domain/catalog | `prompt_payload` | LLM이 route, dataset, filter, pandas 필요 여부를 JSON으로 답하게 하는 지시문을 만듭니다. |
+| `build_prompt` | Langflow 입력값 | `Data(data=prompt_payload)` | Langflow output method입니다. |
+
+### 코드 흐름
+
+```text
+State에서 질문과 이전 current_data 요약 추출
+-> Domain에서 metric/alias/required_datasets 추출
+-> Table catalog에서 dataset 설명 추출
+-> LLM에게 반환해야 할 JSON schema와 판단 기준을 prompt로 작성
+```
+
+### 초보자 포인트
+
+이 노드는 LLM을 호출하지 않습니다. LLM에게 줄 "시험지"를 만드는 노드입니다. 결과가 이상하면 먼저 이 노드의 `prompt` 안에 필요한 정보가 들어갔는지 보면 됩니다.
+
+## 함수 코드 단위 해석: `build_intent_prompt`
+
+이 함수는 현재 질문, 이전 state, domain, table catalog를 모아 Intent LLM에게 줄 prompt를 만듭니다.
+
+### 함수 input
+
+```json
+{
+  "state_payload": {
+    "user_question": "오늘 DA공정 생산량 알려줘",
+    "state": {
+      "session_id": "abc",
+      "current_data": null
+    }
+  },
+  "domain_payload": {
+    "domain": {
+      "process_groups": {
+        "da": {"aliases": ["DA공정"], "processes": ["D/A1", "D/A2"]}
+      }
+    }
+  },
+  "table_catalog_payload": {
+    "table_catalog": {
+      "datasets": {
+        "production": {"keywords": ["생산량"], "tool_name": "get_production_data"}
+      }
+    }
+  }
+}
+```
+
+### 함수 output
+
+```json
+{
+  "prompt_payload": {
+    "prompt": "You are a manufacturing data intent planner...",
+    "state": {"session_id": "abc", "current_data": null},
+    "domain": {"process_groups": "..."},
+    "table_catalog": {"datasets": "..."}
+  }
+}
+```
+
+### 핵심 코드 해석
+
+```python
+state_payload = _unwrap_state(state_payload)
+domain = _unwrap_domain(domain_payload)
+table_catalog = _unwrap_catalog(table_catalog_payload)
+```
+
+앞 노드 출력들은 `Data(data={...})`로 한 번 감싸져 있습니다. 이 세 줄은 그 안에서 실제 state, domain, catalog만 꺼냅니다.
+
+```python
+question = str(state_payload.get("user_question") or state.get("pending_user_question") or "").strip()
+```
+
+현재 사용자 질문을 찾습니다. `user_question`이 없으면 state에 저장된 `pending_user_question`을 사용합니다.
+
+```python
+current_data_summary = _current_data_summary(state.get("current_data") if isinstance(state.get("current_data"), dict) else {})
+```
+
+후속 질문 판단에 필요한 현재 데이터 요약을 만듭니다. 전체 row를 다 넣기보다 row 수, 컬럼, data_ref 같은 작은 정보만 prompt에 넣기 위한 준비입니다.
+
+```python
+prompt = f"""..."""
+```
+
+LLM에게 줄 instruction을 만듭니다. 이 prompt 안에는 다음 내용이 포함됩니다.
+
+- 가능한 route 종류
+- dataset 선택 기준
+- filter를 JSON으로 반환하라는 지시
+- pandas가 필요한 경우
+- domain metric의 required_datasets를 반영하라는 지시
+- 반드시 JSON만 반환하라는 지시
+
+```python
+return {
+    "prompt_payload": {
+        "prompt": prompt,
+        "state": state,
+        "domain": domain,
+        "table_catalog": table_catalog,
+        ...
+    }
+}
+```
+
+LLM 호출 노드는 prompt 문자열만 쓰지만, 뒤 normalizer는 state/domain/catalog도 다시 필요합니다. 그래서 prompt와 context를 같이 담아 보냅니다.

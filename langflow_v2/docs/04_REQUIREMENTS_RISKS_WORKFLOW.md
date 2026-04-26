@@ -10,23 +10,256 @@
 
 ## 1. 개발 요건과 주요 기능
 
-### 1.1 Standalone Langflow Custom Component 구조
+### 1.1 Domain/Table 기반 사용자 의도 추출
 
-이 프로젝트의 Langflow v2 노드는 standalone 방식으로 구현한다.
+이 flow의 첫 번째 핵심 기능은 사용자의 자연어 질문을 제조 데이터 분석용 실행 계획으로 바꾸는 것이다.
 
-즉, 각 custom component 파일은 Langflow에 직접 등록해도 동작해야 하며, 같은 폴더의 공통 모듈을 import하지 않는 것을 원칙으로 한다.
+사용자가 다음처럼 질문한다고 가정한다.
+
+```text
+어제 WB공정 생산달성률을 mode별로 알려줘
+```
+
+flow는 단순히 "생산달성률을 물었다" 정도만 판단하지 않는다. domain 정보와 table catalog를 함께 보고 다음을 구조화한다.
+
+| 판단 항목 | 예시 결과 |
+| --- | --- |
+| 질문 유형 | 신규 데이터 조회 |
+| 필요한 metric | 생산달성률 |
+| 필요한 dataset | `production`, `wip` |
+| 날짜 조건 | 어제 |
+| 공정 조건 | WB 공정 그룹 |
+| 집계 기준 | `MODE` |
+| 후처리 필요 여부 | pandas 계산 필요 |
+
+이 기능이 중요한 이유는 제조 현장 질문이 대부분 축약되어 있기 때문이다. 사용자는 "달성률"이라고만 말하지만, 시스템은 domain의 metric 정의를 보고 `생산량 / 재공 * 100` 같은 계산식과 필요한 dataset을 찾아야 한다.
+
+### 1.2 Domain Metric 기반 복합 Dataset 확장
+
+일반 데이터 조회 챗봇은 질문에 직접 나온 dataset만 조회하는 경우가 많다. 이 flow는 domain metric에 정의된 `required_datasets`를 기준으로 필요한 dataset을 자동 확장한다.
+
+예시 domain item:
+
+```json
+{
+  "gbn": "metrics",
+  "key": "achievement_rate",
+  "payload": {
+    "aliases": ["달성률", "달성율", "생산달성률"],
+    "required_datasets": ["production", "wip"],
+    "formula": "sum(production) / sum(wip_qty) * 100",
+    "grouping_hint": ["MODE", "OPER_NAME"]
+  }
+}
+```
+
+사용자 질문:
+
+```text
+어제 WB공정 생산달성률을 mode별로 알려줘
+```
+
+기대 동작:
+
+```text
+달성률 metric 매칭
+-> required_datasets 확인
+-> production + wip 조회 계획 생성
+-> multi_retrieval branch로 이동
+```
+
+즉, LLM이 `production`만 반환하더라도 normalizer가 domain metric을 기준으로 `wip`을 추가해야 한다.
+
+### 1.3 Table Catalog 기반 조회 Tool 선택
+
+Table catalog는 사용자의 질문과 실제 데이터 조회 tool 사이를 연결하는 지도 역할을 한다.
+
+예시:
+
+```json
+{
+  "dataset_key": "production",
+  "description": "Daily production rows by process, line, mode, density, package.",
+  "keywords": ["생산", "생산량", "production"],
+  "tool_name": "get_production_data",
+  "required_params": ["date"],
+  "common_group_by": ["OPER_NAME", "MODE", "LINE"]
+}
+```
+
+flow는 table catalog를 보고 다음을 판단한다.
+
+- "생산량"이라는 표현은 `production` dataset과 연결된다.
+- `production` 조회에는 `date`가 필수다.
+- 실제 조회 함수는 `get_production_data`다.
+- mode별, 공정별 분석이 자주 쓰인다.
+
+이 기능 덕분에 dataset이나 table이 늘어나도, 질문 분류 prompt와 조회 계획이 catalog 기반으로 확장될 수 있다.
+
+### 1.4 신규 조회와 후속 분석 구분
+
+flow는 모든 질문을 새 조회로 처리하지 않는다. 이전 결과가 있는 상태에서 사용자가 후속 질문을 하면 현재 데이터를 재사용한다.
+
+예시 흐름:
+
+```text
+1차 질문: 오늘 DA공정 생산량 알려줘
+-> production 조회
+-> current_data 저장
+
+2차 질문: 이때 가장 생산량이 많았던 mode 알려줘
+-> followup_transform
+-> current_data 재사용
+-> mode별 최대 생산량 계산
+```
+
+이 기능이 없으면 두 번째 질문도 다시 DB 조회로 가거나, "이때"가 무엇인지 몰라 잘못된 답변을 만들 수 있다.
+
+후속 분석 판단에 필요한 상태:
+
+| 상태 값 | 역할 |
+| --- | --- |
+| `chat_history` | 이전 질문/답변 흐름 확인 |
+| `context` | 이전 조회 조건과 intent 확인 |
+| `current_data` | 후속 분석에 사용할 현재 결과 |
+| `data_ref` | current_data가 클 때 MongoDB에서 다시 불러올 주소 |
+
+### 1.5 단일/복합 데이터 조회 분기
+
+의도 분석 결과에 따라 조회 flow는 단일 조회와 복합 조회로 나뉜다.
+
+| 분기 | 사용 상황 | 예시 |
+| --- | --- | --- |
+| `single_retrieval` | 하나의 dataset만 필요 | "오늘 DA공정 생산량 알려줘" |
+| `multi_retrieval` | 여러 dataset이 필요 | "생산달성률 알려줘", "생산과 목표를 비교해줘" |
+| `followup_transform` | 이전 결과를 분석 | "이때 mode별로 정리해줘" |
+| `finish` | 조회 전 조건 부족 또는 조회 불필요 | "생산량 알려줘"처럼 날짜가 없는 경우 |
+
+복합 조회에서는 여러 retriever 결과가 `source_results`로 모이고, 이후 pandas 전처리 단계에서 병합/계산된다.
+
+### 1.6 Source별 데이터 조회 구조
+
+실제 사용에서는 Oracle DB를 조회하지만, 같은 구조로 dummy 데이터나 MongoDB reference 데이터도 사용할 수 있다.
+
+| 조회 방식 | 역할 |
+| --- | --- |
+| Dummy Data Retriever | DB 없이 flow 연결과 분기 테스트 |
+| Oracle Data Retriever | 실제 Oracle DB에서 dataset 조회 |
+| MongoDB Data Loader | `data_ref`로 저장된 큰 데이터 재조회 |
+| Current Data Retriever | 후속 질문에서 이전 결과 재사용 |
+
+중요한 점은 source가 달라도 output schema를 최대한 통일한다는 것이다.
+
+```json
+{
+  "success": true,
+  "dataset_key": "production",
+  "tool_name": "get_production_data",
+  "data": [],
+  "summary": "total rows 12",
+  "errors": []
+}
+```
+
+이렇게 해야 뒤의 pandas 분석과 최종 답변 노드가 데이터 출처를 몰라도 같은 방식으로 처리할 수 있다.
+
+### 1.7 Pandas 기반 답변용 데이터 후처리
+
+조회된 원본 데이터를 그대로 답변에 쓰기 어려운 질문은 pandas 전처리로 넘어간다.
+
+예시 질문:
+
+```text
+어제 WB공정 생산달성률을 mode별로 알려줘
+```
+
+필요한 처리:
+
+```text
+production dataset 조회
+wip dataset 조회
+MODE 기준 병합 또는 group by
+sum(production) / sum(wip_qty) * 100 계산
+achievement_rate 컬럼 생성
+MODE별 최종 결과 생성
+```
+
+이 flow에서 LLM은 계산 결과를 직접 만들지 않는다. LLM은 pandas 계획 또는 코드를 만들고, 실제 숫자 계산은 pandas executor가 수행한다.
 
 이 방식의 장점:
 
-- Langflow 서버에 custom node를 올릴 때 Python path 문제를 줄일 수 있다.
-- 노드 하나만 복사해도 동작 구조를 이해하기 쉽다.
-- 운영 환경에서 repository 전체를 패키지처럼 배포하지 않아도 된다.
+- 계산 결과의 재현성이 높다.
+- LLM이 숫자를 지어내는 risk를 줄인다.
+- 최종 답변에 사용한 데이터가 `final_rows`로 남는다.
 
-대신 각 파일 안에 작은 helper 함수가 반복될 수 있다. 이 중복은 Langflow standalone 환경을 위한 의도적인 선택이다.
+### 1.8 최종 답변 생성과 최종 데이터 동시 제공
 
-### 1.2 기능 단위로 보이는 분기형 Flow
+최종 출력은 자연어 답변만 반환하지 않는다.
 
-처음 구현은 직선형 flow에 가까웠지만, v2에서는 Langflow canvas에서 의도 분기가 보이도록 구성한다.
+반드시 다음을 함께 제공하는 것이 목표다.
+
+| 출력 | 의미 |
+| --- | --- |
+| `response` | 사용자가 읽는 자연어 답변 |
+| `final_data.rows` | 답변을 만들 때 실제 사용한 최종 가공 데이터 |
+| `final_result` | API나 저장소에서 읽을 수 있는 구조화 결과 |
+| `next_state` | 다음 후속 질문을 위한 state |
+
+예시 출력:
+
+```text
+WB공정의 mode별 생산달성률은 DDR5가 82.1%, HBM3가 76.4%입니다.
+
+### 최종 데이터
+총 2건
+
+| MODE | production | wip_qty | achievement_rate |
+| --- | --- | --- | --- |
+| DDR5 | 1200 | 1462 | 82.1 |
+| HBM3 | 980 | 1283 | 76.4 |
+```
+
+이 구조는 사용자가 답변의 근거 데이터를 함께 확인할 수 있게 해준다.
+
+### 1.9 큰 데이터 Reference 관리
+
+조회 결과 전체를 매번 LLM prompt나 memory에 넣으면 token 비용과 latency가 커진다. 그래서 큰 row list는 MongoDB에 저장하고 flow에는 reference만 유지한다.
+
+권장 흐름:
+
+```text
+원본 row 또는 큰 중간 결과
+-> MongoDB 저장
+-> flow에는 data_ref, row_count, columns, preview, summary만 전달
+-> 실제 계산이 필요할 때 data_ref로 다시 로드
+```
+
+이 기능은 특히 후속 질문에서 중요하다. 이전 결과가 매우 클 때도 `current_data`에 전체 row를 들고 다니지 않고, 필요 시 MongoDB에서 다시 불러올 수 있다.
+
+### 1.10 도메인/테이블 정보 등록 및 확장
+
+도메인 지식과 테이블 카탈로그는 코드 안에 고정하지 않는다.
+
+지원 방식:
+
+- MongoDB에 저장된 domain item document 로딩
+- Langflow 입력창에 직접 넣는 JSON domain fallback
+- Table catalog JSON 입력
+- 등록 웹에서 자연어를 LLM으로 변환해 MongoDB에 저장
+
+등록 웹을 통해 사용자는 다음처럼 자연어로 지식을 넣을 수 있다.
+
+```text
+생산달성률은 생산량 / 재공 * 100으로 계산한다.
+WB는 W/B1, W/B2 공정 그룹을 의미한다.
+mode별로 자주 확인한다.
+```
+
+시스템은 이를 metric, process group, dataset 설명 같은 item document로 변환해 저장하고, main flow는 저장된 item을 읽어 의도 추출과 pandas 후처리에 활용한다.
+
+### 1.11 기능 단위로 보이는 분기형 Flow
+
+v2에서는 Langflow canvas에서 주요 기능 분기가 보이도록 구성한다.
 
 핵심 분기:
 
@@ -41,125 +274,14 @@
 
 이 구조는 단순히 내부 코드에서 if문으로 처리하는 것보다, Langflow 화면에서 어떤 경로로 실행됐는지 확인하기 쉽다.
 
-### 1.3 Intent LLM에서 조회 계획까지 판단
+### 1.12 기능 안정성을 위한 보조 설계
 
-첫 번째 LLM 호출은 단순 의도 분류만 하지 않는다.
+아래 항목은 사용자가 직접 보는 기능은 아니지만, 위 기능들이 일관되게 동작하도록 받쳐주는 설계 요건이다.
 
-다음 정보를 함께 판단한다.
-
-- 신규 조회인지, 이전 결과에 대한 후속 분석인지
-- 필요한 dataset이 무엇인지
-- 필터 조건이 무엇인지
-- pandas 전처리가 필요한지
-- metric 계산에 필요한 추가 dataset이 있는지
-
-예를 들어 사용자가 "어제 WB공정 생산달성률을 mode별로 알려줘"라고 물으면, LLM이 `production`만 찾더라도 domain metric의 `required_datasets`를 참고해 `production + wip` 같은 복합 조회로 확장되어야 한다.
-
-### 1.4 Domain과 Table 정보를 코드 밖에서 관리
-
-도메인 지식과 테이블 카탈로그는 코드 안에 고정하지 않는다.
-
-지원 방식:
-
-- MongoDB에 저장된 domain item document 로딩
-- Langflow 입력창에 직접 넣는 JSON domain fallback
-- Table catalog JSON 입력
-- 등록 웹에서 자연어를 LLM으로 변환해 MongoDB에 저장
-
-이 구조를 쓰면 새로운 metric, 공정 alias, dataset 설명이 생겨도 custom component 코드를 매번 수정하지 않아도 된다.
-
-### 1.5 LLM 호출부와 Prompt/후처리 분리
-
-LLM 관련 처리는 한 노드에 몰아넣지 않는다.
-
-기본 패턴:
-
-```text
-Prompt Builder
--> LLM Caller
--> Parser / Normalizer
--> Router or Executor
-```
-
-이렇게 나누는 이유:
-
-- prompt에 들어간 정보가 잘못됐는지 확인하기 쉽다.
-- LLM 응답 JSON이 깨졌는지 확인하기 쉽다.
-- LLM 결과를 실제 flow route로 바꾸는 부분을 별도로 검증할 수 있다.
-- 추후 LLM provider를 바꿔도 LLM Caller 중심으로 수정하면 된다.
-
-현재 v2 기준 LLM 호출 지점은 세 곳이다.
-
-| 위치 | 역할 |
-| --- | --- |
-| Intent LLM | 사용자 의도, dataset, filter, pandas 필요 여부 판단 |
-| Pandas Plan LLM | 조회된 데이터와 domain 정보를 보고 전처리/집계 계획 생성 |
-| Final Answer LLM | 최종 데이터와 분석 결과를 보고 자연어 답변 생성 |
-
-### 1.6 Dummy/Oracle/MongoDB 조회 구조 분리
-
-데이터 조회는 source별로 갈아끼울 수 있게 구성한다.
-
-현재 기준:
-
-- Dummy Data Retriever: Langflow 연결과 분기 테스트용
-- Oracle Data Retriever: 실제 Oracle DB 조회용
-- MongoDB Data Loader: 저장된 큰 데이터 재조회용
-- Current Data Retriever: 후속 질문에서 이전 결과 재사용
-
-각 retriever는 source가 달라도 비슷한 output schema를 반환해야 한다.
-
-```json
-{
-  "success": true,
-  "dataset_key": "production",
-  "data": [],
-  "summary": "total rows 12",
-  "errors": []
-}
-```
-
-### 1.7 큰 데이터는 Reference로 관리
-
-조회 결과 전체를 매번 LLM prompt나 memory에 넣지 않는다.
-
-권장 흐름:
-
-```text
-원본 row 또는 큰 중간 결과
--> MongoDB 저장
--> flow에는 data_ref, row_count, columns, preview, summary만 전달
--> 실제 계산이 필요할 때 data_ref로 다시 로드
-```
-
-이 방식은 token 비용과 latency를 줄이고, 후속 질문에서 이전 데이터를 안정적으로 재사용하기 위한 핵심 구조다.
-
-### 1.8 최종 답변과 최종 데이터 동시 제공
-
-최종 출력은 답변 문장만 반환하지 않는다.
-
-사용자가 신뢰할 수 있도록 다음을 함께 제공한다.
-
-- LLM이 작성한 자연어 답변
-- 답변을 만들 때 실제로 사용한 최종 가공 데이터
-- 다음 턴에서 쓸 state
-- API/저장용 final result payload
-
-따라서 "데이터를 보고 답변했다"는 구조가 flow output에서도 확인 가능하다.
-
-### 1.9 Langflow Native Memory 기반 Multi-turn
-
-후속 질문을 위해 Langflow Message History를 short-term memory처럼 사용한다.
-
-다음 값을 유지해야 한다.
-
-| 값 | 목적 |
-| --- | --- |
-| `chat_history` | 이전 질문/답변 흐름 |
-| `context` | 최근 의도, filter, dataset 판단 |
-| `current_data` | 후속 분석에 사용할 현재 결과 또는 data reference |
-
-이 값이 유지되어야 "이때 가장 생산량이 많았던 mode 알려줘" 같은 질문이 신규 조회가 아니라 현재 결과 분석으로 이어진다.
+- Prompt Builder, LLM Caller, Parser/Normalizer, Router/Executor를 분리해 디버깅 가능성을 높인다.
+- LLM 호출 지점은 Intent, Pandas Plan, Final Answer로 역할을 분리한다.
+- source별 retriever는 같은 output schema를 유지한다.
+- 오류는 예외로만 중단하지 않고 `success`, `errors`, `summary` 형태로 downstream에 전달한다.
 
 ## 2. Risk 및 대응 방안
 

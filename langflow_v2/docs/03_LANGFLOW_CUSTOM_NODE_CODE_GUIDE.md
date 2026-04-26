@@ -622,6 +622,310 @@ Output: success, rows, summary, errors
 
 DB 연결 문자열, API key, password는 가능한 `SecretStrInput`이나 Langflow variable로 받는다. 코드 안에 고정하지 않는다.
 
+### 20.1 외부 HTTP API에서 데이터 가져오기
+
+외부 API를 호출하는 노드는 DB 조회 노드와 거의 같은 구조로 생각하면 된다.
+
+```text
+Input: api_url, api_key, query params, timeout
+Process: request -> status check -> json parse -> schema normalize
+Output: success, rows 또는 response, summary, errors
+```
+
+예를 들어 REST API에서 JSON 데이터를 가져오는 custom node는 다음처럼 만들 수 있다.
+
+```python
+import json
+from typing import Any, Dict
+
+import requests
+
+from langflow.custom import Component
+from langflow.io import MessageTextInput, MultilineInput, SecretStrInput, Output
+from langflow.schema import Data
+
+
+class ExternalApiRetriever(Component):
+    display_name = "External API Retriever"
+    description = "Call an external HTTP API and return normalized Data."
+    icon = "cloud"
+    name = "ExternalApiRetriever"
+
+    inputs = [
+        MessageTextInput(name="api_url", display_name="API URL", required=True),
+        SecretStrInput(name="api_key", display_name="API Key", required=False),
+        MultilineInput(name="params_json", display_name="Params JSON", value="{}"),
+        MessageTextInput(name="timeout_seconds", display_name="Timeout Seconds", value="15"),
+    ]
+
+    outputs = [
+        Output(name="api_payload", display_name="API Payload", method="call_api"),
+    ]
+
+    def call_api(self) -> Data:
+        errors = []
+        try:
+            params = json.loads(str(self.params_json or "{}"))
+        except json.JSONDecodeError as exc:
+            message = f"Invalid params_json: {exc}"
+            self.status = message
+            return Data(data={"success": False, "rows": [], "errors": [message]})
+
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        try:
+            timeout = float(self.timeout_seconds or 15)
+            response = requests.get(
+                str(self.api_url),
+                params=params,
+                headers=headers,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as exc:
+            message = f"API request failed: {exc}"
+            self.status = message
+            return Data(data={"success": False, "rows": [], "errors": [message]})
+
+        if isinstance(payload, list):
+            rows = payload
+        elif isinstance(payload, dict):
+            rows = payload.get("data") or payload.get("rows") or []
+        else:
+            rows = []
+
+        result = {
+            "success": True,
+            "source_name": "external_api",
+            "rows": rows,
+            "row_count": len(rows) if isinstance(rows, list) else 0,
+            "raw_response": payload,
+            "summary": f"{len(rows) if isinstance(rows, list) else 0} rows",
+            "errors": errors,
+        }
+        self.status = result["summary"]
+        return Data(data=result)
+```
+
+실제 운영용 노드에서는 다음을 추가로 고려한다.
+
+- `timeout`을 반드시 둔다.
+- API 응답이 실패했을 때 `success=False`, `errors=[]` 형태로 다음 노드가 읽을 수 있게 한다.
+- API 응답 원문 전체를 LLM prompt에 바로 넣지 않는다.
+- 필요한 경우 `rows`, `summary`, `data_ref` 형태로 한 번 더 정리한다.
+- 인증정보는 `SecretStrInput`, Langflow variable, 환경변수 중 하나로 받는다.
+
+### 20.2 외부 API 응답을 답변 생성에 쓰는 패턴
+
+외부 API가 꼭 row data만 반환하는 것은 아니다. 검색 API, 사내 지식 API, 티켓 시스템 API처럼 이미 자연어 응답이나 문서 조각을 반환하는 경우도 있다.
+
+이때도 Langflow 안에서는 표준 payload로 감싸는 편이 좋다.
+
+```json
+{
+  "success": true,
+  "source_name": "knowledge_api",
+  "response_text": "요약된 API 응답",
+  "documents": [
+    {
+      "title": "문서 제목",
+      "url": "https://example.com/doc/1",
+      "content": "짧은 근거 문단"
+    }
+  ],
+  "summary": "3 documents found",
+  "errors": []
+}
+```
+
+이 payload는 다음 두 방식 중 하나로 쓸 수 있다.
+
+```text
+API Retriever
+-> Final Answer Prompt Builder
+-> LLM Caller
+-> Final Answer
+```
+
+또는 API 결과를 추가 분석해야 한다면:
+
+```text
+API Retriever
+-> Postprocess Router
+-> Analysis Node
+-> Final Answer Prompt Builder
+```
+
+핵심은 "API 응답 원문"과 "LLM에게 줄 요약/근거"를 구분하는 것이다.
+
+### 20.3 MCP를 활용하는 방식
+
+MCP는 외부 도구와 데이터를 LLM 애플리케이션에 연결하기 위한 프로토콜이다. 파일 검색, 문서 저장소, 업무 시스템, DB 조회, 사내 API 같은 기능을 MCP tool 형태로 노출할 수 있다.
+
+Langflow에서 MCP를 활용하는 방식은 보통 세 가지다.
+
+| 방식 | 설명 | 적합한 경우 |
+| --- | --- | --- |
+| Langflow의 MCP 관련 기본 컴포넌트 사용 | Langflow가 제공하는 MCP 연결 컴포넌트를 사용한다. | 설치한 Langflow 버전에서 MCP 컴포넌트를 지원할 때 |
+| MCP Gateway를 HTTP API로 감싸기 | 별도 Python/FastAPI 서비스가 MCP server와 통신하고, Langflow custom node는 HTTP로 gateway만 호출한다. | 운영 안정성과 배포 관리가 중요할 때 |
+| Custom Component에서 MCP client 직접 사용 | custom node 안에서 MCP client SDK로 server에 직접 연결한다. | 작은 실험, 내부 PoC |
+
+운영에서는 두 번째 방식인 MCP Gateway 패턴이 가장 단순하게 관리되는 경우가 많다.
+
+```text
+Langflow Custom Component
+-> HTTP request
+-> MCP Gateway API
+-> MCP Server / Tool
+-> 외부 시스템
+```
+
+이렇게 하면 Langflow 노드는 일반 외부 API 호출 노드처럼 유지할 수 있고, MCP server 실행 방식이나 tool 목록 관리는 gateway 쪽에서 담당한다.
+
+### 20.4 MCP Gateway 호출 노드 예시
+
+아래 예시는 MCP tool을 직접 실행하는 코드가 아니라, MCP gateway HTTP API를 호출하는 Langflow custom node 예시다.
+
+```python
+import json
+from typing import Any, Dict
+
+import requests
+
+from langflow.custom import Component
+from langflow.io import MessageTextInput, MultilineInput, SecretStrInput, Output
+from langflow.schema import Data
+
+
+class McpGatewayToolCaller(Component):
+    display_name = "MCP Gateway Tool Caller"
+    description = "Call an MCP gateway API and return normalized tool results."
+    icon = "plug"
+    name = "McpGatewayToolCaller"
+
+    inputs = [
+        MessageTextInput(name="gateway_url", display_name="Gateway URL", required=True),
+        MessageTextInput(name="tool_name", display_name="Tool Name", required=True),
+        MultilineInput(name="arguments_json", display_name="Arguments JSON", value="{}"),
+        SecretStrInput(name="gateway_api_key", display_name="Gateway API Key", required=False),
+        MessageTextInput(name="timeout_seconds", display_name="Timeout Seconds", value="30"),
+    ]
+
+    outputs = [
+        Output(name="tool_result", display_name="Tool Result", method="call_tool"),
+    ]
+
+    def call_tool(self) -> Data:
+        try:
+            arguments = json.loads(str(self.arguments_json or "{}"))
+        except json.JSONDecodeError as exc:
+            message = f"Invalid arguments_json: {exc}"
+            self.status = message
+            return Data(data={"success": False, "errors": [message]})
+
+        headers = {"Content-Type": "application/json"}
+        if self.gateway_api_key:
+            headers["Authorization"] = f"Bearer {self.gateway_api_key}"
+
+        request_body = {
+            "tool_name": str(self.tool_name or "").strip(),
+            "arguments": arguments,
+        }
+
+        try:
+            response = requests.post(
+                str(self.gateway_url),
+                headers=headers,
+                json=request_body,
+                timeout=float(self.timeout_seconds or 30),
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as exc:
+            message = f"MCP gateway call failed: {exc}"
+            self.status = message
+            return Data(data={"success": False, "errors": [message]})
+
+        result = {
+            "success": bool(payload.get("success", True)) if isinstance(payload, dict) else True,
+            "source_name": "mcp_gateway",
+            "tool_name": request_body["tool_name"],
+            "arguments": arguments,
+            "result": payload.get("result", payload) if isinstance(payload, dict) else payload,
+            "documents": payload.get("documents", []) if isinstance(payload, dict) else [],
+            "rows": payload.get("rows", []) if isinstance(payload, dict) else [],
+            "summary": payload.get("summary", "MCP tool call completed") if isinstance(payload, dict) else "MCP tool call completed",
+            "errors": payload.get("errors", []) if isinstance(payload, dict) else [],
+        }
+        self.status = result["summary"]
+        return Data(data=result)
+```
+
+Gateway 쪽 API는 다음처럼 단순한 형태로 맞추면 Langflow 노드가 다루기 쉽다.
+
+```json
+{
+  "tool_name": "search_documents",
+  "arguments": {
+    "query": "monthly sales policy",
+    "limit": 5
+  }
+}
+```
+
+응답도 다음처럼 표준화한다.
+
+```json
+{
+  "success": true,
+  "result": {},
+  "documents": [],
+  "rows": [],
+  "summary": "5 documents found",
+  "errors": []
+}
+```
+
+### 20.5 MCP를 ReAct Agent와 연결할 때
+
+MCP tool을 ReAct 방식으로 쓰고 싶다면 구조는 다음처럼 잡을 수 있다.
+
+```text
+User Question
+-> Planner / Agent LLM
+-> Tool Selection
+-> MCP Gateway Tool Caller
+-> Observation Builder
+-> Planner / Agent LLM
+-> Final Answer
+```
+
+주의할 점:
+
+- tool 호출 횟수는 `max_steps`로 제한한다.
+- 같은 tool을 반복 호출할 때는 중복 query를 막는다.
+- tool result 전체를 LLM에 넣지 않고 observation 요약을 만든다.
+- MCP tool 실패 시 다음 action을 계속할지, 사용자에게 실패를 알릴지 route를 명확히 둔다.
+
+고정된 업무 flow에서는 모든 단계를 ReAct로 만들 필요가 없다. 어떤 데이터셋을 조회해야 하는지 명확하고 재현성이 중요하면 고정 DAG가 낫고, 사용 가능한 tool이 많고 탐색이 필요한 경우에 ReAct + MCP 구조가 잘 맞는다.
+
+### 20.6 외부 API/MCP 노드 체크리스트
+
+외부 시스템을 호출하는 노드는 아래 항목을 확인한다.
+
+- 인증정보를 코드에 하드코딩하지 않았는가
+- timeout이 설정되어 있는가
+- 실패 응답이 `success=False`, `errors`로 정리되는가
+- API/MCP 원문 응답과 LLM용 요약을 분리했는가
+- 다음 노드가 기대하는 key 이름으로 normalize했는가
+- 큰 응답은 `data_ref`나 `documents` preview로 줄였는가
+- retry가 필요하다면 최대 횟수와 backoff를 제한했는가
+- 외부 tool 호출 로그에 민감정보가 남지 않는가
+- ReAct와 연결할 경우 tool 호출 최대 횟수를 제한했는가
+
 ## 21. 큰 데이터 처리
 
 LLM flow에서 큰 데이터를 그대로 계속 넘기면 세 가지 문제가 생긴다.
