@@ -42,7 +42,27 @@ def _pd():
     return import_module("pandas")
 
 
-PREFERRED_JOIN_COLUMNS = ["WORK_DT", "WORK_DATE", "OPER_NAME", "OPER_NUM", "MODE", "DEN", "TECH", "MCP_NO", "PKG_TYPE1", "PKG_TYPE2", "LINE", "line"]
+def _as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, set):
+        return list(value)
+    return [value]
+
+
+def _string_list(value: Any) -> list[str]:
+    result: list[str] = []
+    for item in _as_list(value):
+        parts = str(item or "").split(",") if isinstance(item, str) else [str(item or "")]
+        for part in parts:
+            text = part.strip()
+            if text and text not in result:
+                result.append(text)
+    return result
 
 
 def _rows_columns(rows: list[Dict[str, Any]]) -> list[str]:
@@ -60,7 +80,7 @@ def _domain_from_payload(value: Any) -> Dict[str, Any]:
         payload = payload["domain_payload"]
     if isinstance(payload.get("domain"), dict):
         return deepcopy(payload["domain"])
-    if any(key in payload for key in ("products", "process_groups", "terms", "metrics", "join_rules")):
+    if any(key in payload for key in ("products", "process_groups", "terms", "datasets", "metrics", "join_rules")):
         return deepcopy(payload)
     return {"products": {}, "process_groups": {}, "terms": {}, "datasets": {}, "metrics": {}, "join_rules": []}
 
@@ -70,7 +90,56 @@ def _source_results(retrieval: Dict[str, Any]) -> list[Dict[str, Any]]:
     return [item for item in results if isinstance(item, dict)]
 
 
-def _merge_sources(source_results: list[Dict[str, Any]]) -> Dict[str, Any]:
+def _dataset_matches(rule_value: Any, dataset_name: str) -> bool:
+    names = _string_list(rule_value)
+    if not names:
+        return True
+    dataset_parts = {part for part in str(dataset_name or "").split("+") if part}
+    dataset_parts.add(str(dataset_name or ""))
+    return any(name in dataset_parts for name in names)
+
+
+def _join_rule_columns(domain: Dict[str, Any], left_name: str, right_name: str, shared: set[str]) -> list[str]:
+    rules = domain.get("join_rules") if isinstance(domain.get("join_rules"), list) else []
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        keys = (
+            _string_list(rule.get("keys"))
+            or _string_list(rule.get("columns"))
+            or _string_list(rule.get("join_columns"))
+            or _string_list(rule.get("on"))
+        )
+        if not keys or any(key not in shared for key in keys):
+            continue
+        left_rule = rule.get("left_dataset", rule.get("left_dataset_key", rule.get("left")))
+        right_rule = rule.get("right_dataset", rule.get("right_dataset_key", rule.get("right")))
+        direct = _dataset_matches(left_rule, left_name) and _dataset_matches(right_rule, right_name)
+        swapped = _dataset_matches(left_rule, right_name) and _dataset_matches(right_rule, left_name)
+        if direct or swapped:
+            return keys
+    return []
+
+
+def _non_numeric_join_columns(left: Any, right: Any, shared: set[str]) -> list[str]:
+    pd = _pd()
+    result: list[str] = []
+    for column in sorted(shared):
+        if column not in left.columns or column not in right.columns:
+            continue
+        left_numeric = pd.api.types.is_numeric_dtype(left[column])
+        right_numeric = pd.api.types.is_numeric_dtype(right[column])
+        if not (left_numeric and right_numeric):
+            result.append(column)
+    return result
+
+
+def _select_join_columns(domain: Dict[str, Any], left_name: str, right_name: str, left: Any, right: Any, shared: set[str]) -> list[str]:
+    return _join_rule_columns(domain, left_name, right_name, shared) or _non_numeric_join_columns(left, right, shared) or sorted(shared)[:3]
+
+
+def _merge_sources(source_results: list[Dict[str, Any]], domain: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    domain = domain or {}
     valid = [item for item in source_results if item.get("success") and isinstance(item.get("data"), list)]
     failed = [item for item in source_results if not item.get("success")]
     if failed:
@@ -100,7 +169,7 @@ def _merge_sources(source_results: list[Dict[str, Any]]) -> Dict[str, Any]:
         right = frames[index]
         right_name = dataset_keys[index]
         shared = set(str(column) for column in merged.columns) & set(str(column) for column in right.columns)
-        join_columns = [column for column in PREFERRED_JOIN_COLUMNS if column in shared] or sorted(shared)[:3]
+        join_columns = _select_join_columns(domain, current_name, right_name, merged, right, shared)
         if not join_columns:
             return {"success": False, "data": [], "columns": [], "summary": f"No common join key between {current_name} and {right_name}.", "merge_notes": notes}
         merged = merged.merge(right, how="inner", on=join_columns, suffixes=("", f"_{right_name}"))
@@ -162,11 +231,11 @@ def build_pandas_prompt(retrieval_payload_value: Any, domain_payload_value: Any 
     if retrieval.get("skipped"):
         return {"prompt_payload": {"skipped": True, "skip_reason": retrieval.get("skip_reason", "route skipped"), "prompt_type": "pandas_analysis", "retrieval_payload": retrieval, "table": {}, "intent_plan": retrieval.get("intent_plan", {}), "domain": {}, "columns": [], "row_count": 0, "prompt": ""}}
     plan = retrieval.get("intent_plan") if isinstance(retrieval.get("intent_plan"), dict) else {}
+    domain = _domain_from_payload(domain_payload_value)
     source_results = _source_results(retrieval)
-    table = _merge_sources(source_results)
+    table = _merge_sources(source_results, domain)
     rows = table.get("data") if isinstance(table.get("data"), list) else []
     columns = table.get("columns") if isinstance(table.get("columns"), list) else _rows_columns(rows)
-    domain = _domain_from_payload(domain_payload_value)
     prompt = _build_prompt(plan, rows, [str(column) for column in columns], domain)
     return {
         "prompt_payload": {

@@ -154,14 +154,48 @@ def _dataset_configs(table_catalog: Dict[str, Any]) -> Dict[str, Dict[str, Any]]
     return {str(key): value for key, value in datasets.items() if isinstance(value, dict)}
 
 
+def _active_dataset_configs(table_catalog: Dict[str, Any], dataset_keys: list[str] | None = None) -> Dict[str, Dict[str, Any]]:
+    configs = _dataset_configs(table_catalog)
+    active_keys = [str(key) for key in _as_list(dataset_keys) if str(key) in configs]
+    if not active_keys:
+        active_keys = list(configs.keys())
+    return {key: configs[key] for key in active_keys}
+
+
 def _main_flow_filter_defs(main_flow_filters: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     filters = main_flow_filters.get("filters") if isinstance(main_flow_filters.get("filters"), dict) else {}
     return {str(key): value for key, value in filters.items() if isinstance(value, dict)}
 
 
-def _dataset_columns(dataset: Dict[str, Any]) -> list[str]:
-    columns: list[str] = []
+def _main_flow_required_param_defs(main_flow_filters: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    params = main_flow_filters.get("required_params") if isinstance(main_flow_filters.get("required_params"), dict) else {}
+    return {str(key): value for key, value in params.items() if isinstance(value, dict)}
+
+
+def _dataset_column_items(dataset: Dict[str, Any]) -> list[Dict[str, Any]]:
+    columns: list[Dict[str, Any]] = []
     for item in _as_list(dataset.get("columns")):
+        if isinstance(item, dict):
+            text = str(item.get("name") or item.get("column") or "").strip()
+            if text:
+                columns.append({**deepcopy(item), "name": text})
+        else:
+            text = str(item or "").strip()
+            if text:
+                columns.append({"name": text})
+    return columns
+
+
+def _dataset_columns(dataset: Dict[str, Any]) -> list[str]:
+    return _unique_strings([item.get("name") for item in _dataset_column_items(dataset)])
+
+
+def _columns_from_config(value: Any) -> list[str]:
+    columns: list[str] = []
+    raw = value
+    if isinstance(raw, dict):
+        raw = raw.get("columns") or raw.get("column") or raw.get("names") or raw.get("name")
+    for item in _as_list(raw):
         if isinstance(item, dict):
             text = str(item.get("name") or item.get("column") or "").strip()
         else:
@@ -171,16 +205,31 @@ def _dataset_columns(dataset: Dict[str, Any]) -> list[str]:
     return columns
 
 
+def _definition_columns(definition: Dict[str, Any]) -> list[str]:
+    columns: list[str] = []
+    for key in ("group_by_columns", "group_columns", "column_candidates", "columns"):
+        columns.extend(_columns_from_config(definition.get(key)))
+    return _unique_strings(columns)
+
+
 def _dataset_filter_columns(dataset: Dict[str, Any], filter_key: str) -> list[str]:
     mappings = dataset.get("filter_mappings") if isinstance(dataset.get("filter_mappings"), dict) else {}
     raw_columns = mappings.get(filter_key)
-    if isinstance(raw_columns, dict):
-        raw_columns = raw_columns.get("columns") or raw_columns.get("column")
-    columns = _unique_strings([str(item) for item in _as_list(raw_columns)])
+    columns = _columns_from_config(raw_columns)
     if columns:
         return columns
     dataset_columns = _dataset_columns(dataset)
     return [column for column in dataset_columns if _normalize_text(column) == _normalize_text(filter_key)]
+
+
+def _dataset_required_param_columns(dataset: Dict[str, Any], param_key: str) -> list[str]:
+    for mapping_key in ("required_param_mappings", "param_mappings"):
+        mappings = dataset.get(mapping_key) if isinstance(dataset.get(mapping_key), dict) else {}
+        columns = _columns_from_config(mappings.get(param_key))
+        if columns:
+            return columns
+    dataset_columns = _dataset_columns(dataset)
+    return [column for column in dataset_columns if _normalize_text(column) == _normalize_text(param_key)]
 
 
 def _current_columns(state: Dict[str, Any]) -> list[str]:
@@ -197,43 +246,118 @@ def _contains_any(question: str, tokens: list[str]) -> bool:
     return any(str(token).lower() in lowered for token in tokens)
 
 
-DEFAULT_DATASET_KEYWORDS = {
-    "production": ["생산", "실적", "생산량", "output", "actual"],
-    "target": ["목표", "계획", "목표량", "target", "plan"],
-    "wip": ["재공", "wip"],
-    "equipment": ["설비", "장비", "equipment"],
-    "defect": ["불량", "defect"],
-    "yield": ["수율", "yield"],
-    "hold": ["홀드", "hold"],
-    "scrap": ["스크랩", "scrap"],
-    "recipe": ["레시피", "recipe"],
-    "lot_trace": ["lot", "lot trace", "이력", "추적"],
-}
+def _planner_terms(main_flow_filters: Dict[str, Any] | None, key: str) -> list[str]:
+    config = main_flow_filters or {}
+    if isinstance(config.get("main_flow_filters"), dict):
+        config = config["main_flow_filters"]
+    terms = config.get("planner_terms") if isinstance(config.get("planner_terms"), dict) else {}
+    raw = terms.get(key)
+    if isinstance(raw, dict):
+        raw = raw.get("tokens") or raw.get("aliases") or raw.get("keywords") or raw.get("values")
+    return _unique_strings([str(item) for item in _as_list(raw) if str(item or "").strip()])
+
+
+def _contains_planner_term(question: str, main_flow_filters: Dict[str, Any] | None, key: str) -> bool:
+    return _matches_alias(question, _planner_terms(main_flow_filters, key))
+
+
+def _alias_candidates(key: str, item: Dict[str, Any]) -> list[Any]:
+    return [
+        key,
+        item.get("display_name", ""),
+        item.get("name", ""),
+        item.get("description", ""),
+        *_as_list(item.get("aliases")),
+        *_as_list(item.get("keywords")),
+        *_as_list(item.get("question_examples")),
+    ]
+
+
+def _matches_alias(question: str, aliases: list[Any]) -> bool:
+    normalized_question = _normalize_text(question)
+    for alias in aliases:
+        text = str(alias or "").strip()
+        normalized_alias = _normalize_text(text)
+        if not normalized_alias:
+            continue
+        if re.fullmatch(r"[A-Za-z0-9_]+", text):
+            if re.search(rf"(?i)(?<![A-Za-z0-9_]){re.escape(text)}(?![A-Za-z0-9_])", str(question or "")):
+                return True
+            continue
+        if normalized_alias in normalized_question:
+            return True
+    return False
+
+
+def _merge_filter_values(target: Dict[str, Any], field: str, values: Any) -> None:
+    clean_values = _unique_strings([str(item) for item in _as_list(values) if str(item).strip()])
+    if not field or not clean_values:
+        return
+    target[field] = _unique_strings([*_as_list(target.get(field)), *clean_values])
+
+
+def _domain_dataset_config(domain: Dict[str, Any], dataset_key: str) -> Dict[str, Any]:
+    datasets = domain.get("datasets") if isinstance(domain.get("datasets"), dict) else {}
+    dataset = datasets.get(dataset_key)
+    return dataset if isinstance(dataset, dict) else {}
+
+
+def _domain_filter_matches(question: str, domain: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    domain = domain or {}
+    filters: Dict[str, Any] = {}
+
+    process_groups = domain.get("process_groups") if isinstance(domain.get("process_groups"), dict) else {}
+    for group_key, group in process_groups.items():
+        if not isinstance(group, dict):
+            continue
+        processes = [str(item) for item in _as_list(group.get("processes")) if str(item).strip()]
+        if _matches_alias(question, _alias_candidates(str(group_key), group)):
+            group_filters = group.get("filters") if isinstance(group.get("filters"), dict) else {}
+            if group_filters:
+                for field, values in group_filters.items():
+                    _merge_filter_values(filters, str(field), values)
+            elif processes:
+                _merge_filter_values(filters, "process_name", processes)
+        for process in processes:
+            if _normalize_text(process) and _normalize_text(process) in _normalize_text(question):
+                _merge_filter_values(filters, "process_name", [process])
+
+    for section_name in ("products", "terms"):
+        section = domain.get(section_name) if isinstance(domain.get(section_name), dict) else {}
+        for item_key, item in section.items():
+            if not isinstance(item, dict):
+                continue
+            if not _matches_alias(question, _alias_candidates(str(item_key), item)):
+                continue
+            item_filters = item.get("filters") if isinstance(item.get("filters"), dict) else item.get("filter_values")
+            if isinstance(item_filters, dict):
+                for field, values in item_filters.items():
+                    _merge_filter_values(filters, str(field), values)
+
+    return filters
 
 
 def _dataset_hints(question: str, table_catalog: Dict[str, Any], domain: Dict[str, Any]) -> list[str]:
     normalized_question = _normalize_text(question)
     found: list[str] = []
     for dataset_key, dataset in _dataset_configs(table_catalog).items():
+        domain_dataset = _domain_dataset_config(domain, dataset_key)
         candidates = [
             dataset_key,
             dataset.get("display_name", ""),
             dataset.get("description", ""),
-            *DEFAULT_DATASET_KEYWORDS.get(str(dataset_key), []),
             *_as_list(dataset.get("keywords")),
             *_as_list(dataset.get("aliases")),
             *_as_list(dataset.get("question_examples")),
+            *_alias_candidates(str(dataset_key), domain_dataset),
         ]
         if any(_normalize_text(item) and _normalize_text(item) in normalized_question for item in candidates):
             found.append(dataset_key)
 
-    metrics = domain.get("metrics") if isinstance(domain.get("metrics"), dict) else {}
     for _metric_key, metric in _matched_metrics(question, domain).items():
         if isinstance(metric, dict):
             found.extend(str(item) for item in _as_list(metric.get("required_datasets")))
 
-    if _contains_any(question, ["achievement", "achievement rate", "target 대비", "목표 대비", "목표대비", "달성률", "달성율"]):
-        found.extend(["production", "target"])
     return _unique_strings(found)
 
 
@@ -256,38 +380,8 @@ def _matched_metrics(question: str, domain: Dict[str, Any]) -> Dict[str, Dict[st
 
 
 def _filters_from_question(question: str, domain: Dict[str, Any] | None = None, main_flow_filters: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    filters: Dict[str, Any] = {}
+    filters: Dict[str, Any] = _domain_filter_matches(question, domain)
     filter_defs = _main_flow_filter_defs(main_flow_filters or {})
-    process_matches = re.findall(r"\b(?:D/A|DA|W/B|WB)\s*-?\s*\d+\b", question, flags=re.IGNORECASE)
-    normalized_processes: list[str] = []
-    for item in process_matches:
-        text = re.sub(r"\s+", "", item.upper())
-        if text.startswith("DA"):
-            text = text.replace("DA", "D/A", 1)
-        if text.startswith("WB"):
-            text = text.replace("WB", "W/B", 1)
-        normalized_processes.append(text)
-    if normalized_processes:
-        filters["process_name"] = _unique_strings(normalized_processes)
-    elif _contains_any(question, ["DA공정", "D/A공정", "DA process"]):
-        filters["process_name"] = ["D/A1", "D/A2", "D/A3"]
-    elif _contains_any(question, ["WB공정", "W/B공정", "WB process"]):
-        filters["process_name"] = ["W/B1", "W/B2"]
-
-    groups = (domain or {}).get("process_groups") if isinstance((domain or {}).get("process_groups"), dict) else {}
-    for _group_key, group in groups.items():
-        if not isinstance(group, dict):
-            continue
-        aliases = [group.get("display_name", ""), *_as_list(group.get("aliases"))]
-        if any(_normalize_text(item) and _normalize_text(item) in _normalize_text(question) for item in aliases):
-            processes = [str(item) for item in _as_list(group.get("processes")) if str(item).strip()]
-            if processes and not filters.get("process_name"):
-                filters["process_name"] = processes
-
-    modes = [token for token in ("DDR5", "LPDDR5", "HBM3", "HBM") if token.lower() in question.lower()]
-    if modes:
-        filters["mode"] = _unique_strings(modes)
-
     normalized_question = _normalize_text(question)
     for filter_key, definition in filter_defs.items():
         if filter_key in filters:
@@ -391,42 +485,247 @@ def _filter_plan(filters: Dict[str, Any], column_filters: Dict[str, Any], needed
     return plan
 
 
-def _group_by_from_question(question: str) -> list[str]:
-    mapping = {
-        "MODE": ["mode별", "모드별", "mode", "모드", "by mode", "group by mode"],
-        "OPER_NAME": ["공정별", "process별", "by process", "group by process"],
-        "LINE": ["라인별", "line별", "by line", "group by line"],
-        "MCP_NO": ["제품별", "mcp별", "product별", "by product", "group by product"],
-    }
-    lowered = question.lower()
-    return _unique_strings([column for column, tokens in mapping.items() if any(token.lower() in lowered for token in tokens)])
+def _label_candidates(key: str, item: Dict[str, Any]) -> list[Any]:
+    return [
+        key,
+        item.get("display_name", ""),
+        item.get("name", ""),
+        *_as_list(item.get("aliases")),
+        *_as_list(item.get("keywords")),
+    ]
 
 
-def _sort_from_question(question: str, columns: list[str] | None = None) -> Dict[str, Any] | None:
-    lowered = str(question or "").lower()
-    metric = "production"
-    if _contains_any(question, ["달성률", "달성율", "목표 대비", "목표대비", "achievement"]):
-        metric = "achievement_rate"
-    for candidate in ("production", "target", "achievement_rate", "wip_qty", "defect_qty", "yield_rate", "scrap_qty"):
-        if candidate.lower() in lowered:
-            metric = candidate
-            break
-    if any(token in lowered for token in ("가장", "최대", "많", "높", "상위", "top", "max", "highest")):
+def _has_rank_or_sort_intent(question: str, main_flow_filters: Dict[str, Any] | None = None) -> bool:
+    terms = [
+        *_planner_terms(main_flow_filters, "rank_desc"),
+        *_planner_terms(main_flow_filters, "rank_asc"),
+        *_planner_terms(main_flow_filters, "sort"),
+    ]
+    return _contains_any(question, terms)
+
+
+def _matches_grouping_alias(question: str, aliases: list[Any], main_flow_filters: Dict[str, Any] | None = None, allow_bare: bool = False) -> bool:
+    normalized_question = _normalize_text(question)
+    raw_question = str(question or "")
+    suffixes = _planner_terms(main_flow_filters, "grouping_suffixes")
+    prefixes = _planner_terms(main_flow_filters, "grouping_prefixes")
+    postfixes = _planner_terms(main_flow_filters, "grouping_postfixes")
+    for alias in aliases:
+        text = str(alias or "").strip()
+        normalized_alias = _normalize_text(text)
+        if not normalized_alias:
+            continue
+        if suffixes and any(f"{normalized_alias}{_normalize_text(suffix)}" in normalized_question for suffix in suffixes):
+            return True
+        if re.fullmatch(r"[A-Za-z0-9_./ -]+", text):
+            escaped = re.escape(text).replace(r"\ ", r"\s+")
+            prefix_pattern = "|".join(re.escape(prefix).replace(r"\ ", r"\s+") for prefix in prefixes)
+            postfix_pattern = "|".join(re.escape(postfix).replace(r"\ ", r"\s+") for postfix in postfixes)
+            if prefix_pattern and re.search(rf"(?i)\b(?:{prefix_pattern})\s+{escaped}\b", raw_question):
+                return True
+            if postfix_pattern and re.search(rf"(?i)\b{escaped}\s*(?:{postfix_pattern})\b", raw_question):
+                return True
+        if allow_bare and _matches_alias(question, [text]):
+            return True
+    return False
+
+
+def _candidate_column_items(table_catalog: Dict[str, Any], current_columns: list[str] | None = None, needed_datasets: list[str] | None = None) -> list[Dict[str, Any]]:
+    items: list[Dict[str, Any]] = []
+    for dataset_key, dataset in _active_dataset_configs(table_catalog, needed_datasets).items():
+        for item in _dataset_column_items(dataset):
+            items.append({**item, "dataset_key": dataset_key})
+    for column in _as_list(current_columns):
+        text = str(column or "").strip()
+        if text:
+            items.append({"name": text, "dataset_key": "current_data"})
+    deduped: list[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        name = str(item.get("name") or "").strip()
+        if name and name not in seen:
+            seen.add(name)
+            deduped.append(item)
+    return deduped
+
+
+def _column_alias_candidates(column_item: Dict[str, Any]) -> list[Any]:
+    return [
+        column_item.get("name", ""),
+        column_item.get("display_name", ""),
+        column_item.get("label", ""),
+        *_as_list(column_item.get("aliases")),
+        *_as_list(column_item.get("keywords")),
+    ]
+
+
+def _columns_matching_aliases(columns: list[Dict[str, Any]], aliases: list[Any]) -> list[str]:
+    normalized_aliases = {_normalize_text(alias) for alias in aliases if _normalize_text(alias)}
+    result: list[str] = []
+    for item in columns:
+        name = str(item.get("name") or "").strip()
+        column_aliases = {_normalize_text(alias) for alias in _column_alias_candidates(item) if _normalize_text(alias)}
+        if name and normalized_aliases.intersection(column_aliases):
+            result.append(name)
+    return _unique_strings(result)
+
+
+def _existing_or_configured_columns(columns: list[str], table_catalog: Dict[str, Any], current_columns: list[str] | None = None, needed_datasets: list[str] | None = None) -> list[str]:
+    available = {str(item.get("name") or "").strip() for item in _candidate_column_items(table_catalog, current_columns, needed_datasets)}
+    available.discard("")
+    if not available:
+        return _unique_strings(columns)
+    existing = [column for column in columns if column in available]
+    return _unique_strings(existing or columns)
+
+
+def _semantic_group_columns(filter_key: str, definition: Dict[str, Any], table_catalog: Dict[str, Any], current_columns: list[str] | None = None, needed_datasets: list[str] | None = None, source: str = "filter") -> list[str]:
+    columns: list[str] = []
+    for dataset in _active_dataset_configs(table_catalog, needed_datasets).values():
+        mapped = _dataset_required_param_columns(dataset, filter_key) if source == "required_param" else _dataset_filter_columns(dataset, filter_key)
+        if mapped:
+            columns.append(mapped[0])
+    columns.extend(_existing_or_configured_columns(_definition_columns(definition), table_catalog, current_columns, needed_datasets))
+    if not columns:
+        columns.extend(_columns_matching_aliases(_candidate_column_items(table_catalog, current_columns, needed_datasets), _label_candidates(filter_key, definition)))
+    return _unique_strings(columns)
+
+
+def _domain_term_group_columns(term_key: str, term: Dict[str, Any], table_catalog: Dict[str, Any], main_flow_filters: Dict[str, Any], current_columns: list[str] | None = None, needed_datasets: list[str] | None = None) -> list[str]:
+    columns = _existing_or_configured_columns(_definition_columns(term), table_catalog, current_columns, needed_datasets)
+    semantic_key = str(term.get("semantic_key") or term.get("filter_key") or "").strip()
+    if semantic_key:
+        definition = _main_flow_filter_defs(main_flow_filters).get(semantic_key, {})
+        columns.extend(_semantic_group_columns(semantic_key, definition, table_catalog, current_columns, needed_datasets))
+    if not columns:
+        columns.extend(_columns_matching_aliases(_candidate_column_items(table_catalog, current_columns, needed_datasets), _label_candidates(term_key, term)))
+    return _unique_strings(columns)
+
+
+def _normalize_group_by_values(values: Any, table_catalog: Dict[str, Any], main_flow_filters: Dict[str, Any], domain: Dict[str, Any], current_columns: list[str] | None = None, needed_datasets: list[str] | None = None) -> list[str]:
+    columns: list[str] = []
+    available_columns = {str(item.get("name")) for item in _candidate_column_items(table_catalog, current_columns, needed_datasets)}
+    filter_defs = _main_flow_filter_defs(main_flow_filters)
+    required_defs = _main_flow_required_param_defs(main_flow_filters)
+    terms = domain.get("terms") if isinstance(domain.get("terms"), dict) else {}
+    for value in _as_list(values):
+        text = str(value or "").strip()
+        if not text:
+            continue
+        if text in available_columns:
+            columns.append(text)
+        elif text in filter_defs:
+            columns.extend(_semantic_group_columns(text, filter_defs[text], table_catalog, current_columns, needed_datasets))
+        elif text in required_defs:
+            columns.extend(_semantic_group_columns(text, required_defs[text], table_catalog, current_columns, needed_datasets, "required_param"))
+        elif text in terms and isinstance(terms[text], dict):
+            columns.extend(_domain_term_group_columns(text, terms[text], table_catalog, main_flow_filters, current_columns, needed_datasets))
+        else:
+            columns.append(text)
+    return _unique_strings(columns)
+
+
+def _group_by_from_question(question: str, table_catalog: Dict[str, Any] | None = None, main_flow_filters: Dict[str, Any] | None = None, domain: Dict[str, Any] | None = None, current_columns: list[str] | None = None, needed_datasets: list[str] | None = None) -> list[str]:
+    table_catalog = table_catalog or {}
+    main_flow_filters = main_flow_filters or {}
+    domain = domain or {}
+    allow_bare = _has_rank_or_sort_intent(question, main_flow_filters)
+    group_columns: list[str] = []
+
+    for filter_key, definition in _main_flow_filter_defs(main_flow_filters).items():
+        if _matches_grouping_alias(question, _label_candidates(filter_key, definition), main_flow_filters, allow_bare):
+            group_columns.extend(_semantic_group_columns(filter_key, definition, table_catalog, current_columns, needed_datasets))
+
+    for param_key, definition in _main_flow_required_param_defs(main_flow_filters).items():
+        if _matches_grouping_alias(question, _label_candidates(param_key, definition), main_flow_filters, allow_bare):
+            group_columns.extend(_semantic_group_columns(param_key, definition, table_catalog, current_columns, needed_datasets, "required_param"))
+
+    terms = domain.get("terms") if isinstance(domain.get("terms"), dict) else {}
+    for term_key, term in terms.items():
+        if not isinstance(term, dict):
+            continue
+        if _matches_grouping_alias(question, _label_candidates(str(term_key), term), main_flow_filters, allow_bare):
+            group_columns.extend(_domain_term_group_columns(str(term_key), term, table_catalog, main_flow_filters, current_columns, needed_datasets))
+
+    for column_item in _candidate_column_items(table_catalog, current_columns, needed_datasets):
+        if _matches_grouping_alias(question, _column_alias_candidates(column_item), main_flow_filters, allow_bare):
+            group_columns.append(str(column_item.get("name") or "").strip())
+
+    return _unique_strings(group_columns)
+
+
+def _sort_column_candidates(table_catalog: Dict[str, Any], domain: Dict[str, Any], needed_datasets: list[str] | None = None, current_columns: list[str] | None = None) -> list[tuple[str, list[Any]]]:
+    candidates: list[tuple[str, list[Any]]] = []
+    for dataset_key, dataset in _active_dataset_configs(table_catalog, needed_datasets).items():
+        domain_dataset = _domain_dataset_config(domain, dataset_key)
+        primary_columns = [
+            domain_dataset.get("primary_quantity_column"),
+            dataset.get("primary_quantity_column"),
+            domain_dataset.get("output_column"),
+            dataset.get("output_column"),
+        ]
+        if str(dataset_key) in _dataset_columns(dataset):
+            primary_columns.append(dataset_key)
+        for column in _unique_strings([str(item) for item in primary_columns if str(item or "").strip()]):
+            candidates.append((column, [column, *_label_candidates(dataset_key, dataset), *_label_candidates(dataset_key, domain_dataset)]))
+        for item in _dataset_column_items(dataset):
+            column = str(item.get("name") or "").strip()
+            column_type = str(item.get("type") or item.get("value_type") or "").lower()
+            if column and column_type in {"number", "numeric", "int", "integer", "float", "double", "decimal"}:
+                candidates.append((column, _column_alias_candidates(item)))
+    for column in _as_list(current_columns):
+        text = str(column or "").strip()
+        if text:
+            candidates.append((text, [text]))
+
+    result: list[tuple[str, list[Any]]] = []
+    seen: set[str] = set()
+    for column, aliases in candidates:
+        if column and column not in seen:
+            seen.add(column)
+            result.append((column, aliases))
+    return result
+
+
+def _sort_from_question(question: str, metric_definitions: Dict[str, Dict[str, Any]] | None = None, columns: list[str] | None = None, table_catalog: Dict[str, Any] | None = None, domain: Dict[str, Any] | None = None, needed_datasets: list[str] | None = None, main_flow_filters: Dict[str, Any] | None = None) -> Dict[str, Any] | None:
+    if not _has_rank_or_sort_intent(question, main_flow_filters):
+        return None
+
+    metric = ""
+    for metric_key, definition in (metric_definitions or {}).items():
+        if isinstance(definition, dict):
+            metric = str(definition.get("output_column") or metric_key).strip()
+            if metric:
+                break
+    if not metric:
+        for candidate, aliases in _sort_column_candidates(table_catalog or {}, domain or {}, needed_datasets, columns):
+            if _matches_alias(question, aliases):
+                metric = candidate
+                break
+    if not metric:
+        candidates = _sort_column_candidates(table_catalog or {}, domain or {}, needed_datasets, columns)
+        if candidates:
+            metric = candidates[0][0]
+    if not metric:
+        return None
+
+    if _contains_planner_term(question, main_flow_filters, "rank_desc"):
         return {"column": metric, "ascending": False}
-    if any(token in lowered for token in ("최소", "적", "낮", "하위", "min", "lowest")):
+    if _contains_planner_term(question, main_flow_filters, "rank_asc"):
         return {"column": metric, "ascending": True}
     return None
 
 
-def _top_n_from_question(question: str) -> int | None:
+def _top_n_from_question(question: str, main_flow_filters: Dict[str, Any] | None = None) -> int | None:
     lowered = str(question or "").lower()
-    match = re.search(r"(?:top|상위|하위)\s*(\d+)", lowered)
-    if match:
-        try:
-            return max(1, int(match.group(1)))
-        except Exception:
-            return 1
-    if any(token in lowered for token in ("가장", "최대", "최소", "제일", "top", "max", "min", "highest", "lowest")):
+    for token in _planner_terms(main_flow_filters, "top_n"):
+        match = re.search(rf"{re.escape(str(token).lower())}\s*(\d+)", lowered)
+        if match:
+            try:
+                return max(1, int(match.group(1)))
+            except Exception:
+                return 1
+    if _has_rank_or_sort_intent(question, main_flow_filters):
         return 1
     return None
 
@@ -506,11 +805,12 @@ def _normalize_plan(raw_plan: Dict[str, Any], question: str, state: Dict[str, An
     if not needed_datasets:
         needed_datasets = _dataset_hints(question, table_catalog, domain)
     needed_datasets = [key for key in _unique_strings(needed_datasets) if key in configs]
+    current_columns = _current_columns(state)
 
     raw_filters = raw_plan.get("filters") if isinstance(raw_plan.get("filters"), dict) else {}
     explicit_filters = {**_filters_from_question(question, domain, main_flow_filters), **raw_filters}
     raw_column_filters = raw_plan.get("column_filters") if isinstance(raw_plan.get("column_filters"), dict) else {}
-    explicit_column_filters = {**_column_filters_from_question(question, table_catalog, _current_columns(state)), **raw_column_filters}
+    explicit_column_filters = {**_column_filters_from_question(question, table_catalog, current_columns), **raw_column_filters}
 
     raw_params: Dict[str, Any] = {}
     if isinstance(raw_plan.get("required_params"), dict):
@@ -528,27 +828,38 @@ def _normalize_plan(raw_plan: Dict[str, Any], question: str, state: Dict[str, An
     column_filters, inherited_column_filters = _merge_conditions(previous_column_filters, explicit_column_filters)
     required_changed = _required_param_changed(previous_params if isinstance(previous_params, dict) else {}, explicit_params)
 
-    explicit_fresh = _contains_any(question, ["새로", "다시 조회", "신규", "fresh", "reload", "new data"])
-    followup_like = _contains_any(question, ["그 결과", "이 결과", "현재 결과", "그중", "그 중", "여기서", "방금", "이때", "그때", "위 결과", "앞선 결과", "해당 결과", "that result", "current result"])
+    explicit_fresh = _contains_planner_term(question, main_flow_filters, "fresh_retrieval")
+    followup_like = _contains_planner_term(question, main_flow_filters, "followup_reference")
     query_mode = str(raw_plan.get("query_mode") or "").strip()
+    query_mode_source = "llm" if query_mode in {"retrieval", "followup_transform", "finish", "clarification"} else "fallback"
     if query_mode not in {"retrieval", "followup_transform", "finish", "clarification"}:
         query_mode = "followup_transform" if _has_current_data(state) and followup_like and not explicit_fresh else "retrieval"
+    if query_mode == "followup_transform" and explicit_fresh:
+        query_mode = "retrieval"
+        query_mode_source = "guard:fresh_retrieval"
     if query_mode == "followup_transform" and not _has_current_data(state):
         query_mode = "retrieval"
+        query_mode_source = "guard:no_current_data"
     if query_mode == "followup_transform" and (required_changed or not _filters_within_current_scope(state, filters, column_filters)):
         query_mode = "retrieval"
+        query_mode_source = "guard:scope_changed"
     if query_mode == "retrieval" and not needed_datasets and _has_current_data(state):
         current = state.get("current_data") if isinstance(state.get("current_data"), dict) else {}
         needed_datasets = [key for key in _as_list(current.get("source_dataset_keys")) if str(key) in configs]
 
-    group_by = _unique_strings([*_as_list(raw_plan.get("group_by")), *_group_by_from_question(question)])
-    needs_pandas = bool(raw_plan.get("needs_pandas") or raw_plan.get("needs_post_processing") or group_by)
-    if _contains_any(question, ["별", "기준", "top", "상위", "하위", "정렬", "비교", "달성률", "달성율", "비율", "rate", "ratio", "group", "by"]) or query_mode == "followup_transform" or len(needed_datasets) > 1 or bool(matched_metrics):
+    raw_group_by = _normalize_group_by_values(raw_plan.get("group_by"), table_catalog, main_flow_filters, domain, current_columns, needed_datasets)
+    question_group_by = _group_by_from_question(question, table_catalog, main_flow_filters, domain, current_columns, needed_datasets)
+    group_by = _unique_strings([*raw_group_by, *question_group_by])
+    sort = raw_plan.get("sort") or _sort_from_question(question, matched_metrics, current_columns, table_catalog, domain, needed_datasets, main_flow_filters)
+    top_n = raw_plan.get("top_n") or _top_n_from_question(question, main_flow_filters)
+    raw_needs_pandas_present = "needs_pandas" in raw_plan or "needs_post_processing" in raw_plan
+    needs_pandas = bool(raw_plan.get("needs_pandas") or raw_plan.get("needs_post_processing") or group_by or sort or top_n)
+    if (not raw_needs_pandas_present and _contains_planner_term(question, main_flow_filters, "post_processing")) or query_mode == "followup_transform" or len(needed_datasets) > 1 or bool(matched_metrics):
         needs_pandas = True
 
     jobs = []
     missing: list[Dict[str, str]] = []
-    resolved_filter_plan = _filter_plan(filters, column_filters, needed_datasets, table_catalog, main_flow_filters, _current_columns(state))
+    resolved_filter_plan = _filter_plan(filters, column_filters, needed_datasets, table_catalog, main_flow_filters, current_columns)
     if query_mode == "retrieval":
         for dataset_key in needed_datasets:
             job = _build_job(dataset_key, configs.get(dataset_key, {}), params, filters, column_filters, resolved_filter_plan)
@@ -609,9 +920,10 @@ def _normalize_plan(raw_plan: Dict[str, Any], question: str, state: Dict[str, An
         "inherited_filters": inherited_filters,
         "inherited_column_filters": inherited_column_filters,
         "required_param_changed": required_changed,
+        "query_mode_source": query_mode_source,
         "group_by": group_by,
-        "sort": raw_plan.get("sort") or _sort_from_question(question),
-        "top_n": raw_plan.get("top_n") or _top_n_from_question(question),
+        "sort": sort,
+        "top_n": top_n,
         "needs_pandas": needs_pandas,
         "metric_keys": list(matched_metrics.keys()),
         "metric_definitions": matched_metrics,
@@ -637,12 +949,14 @@ def normalize_intent_plan(llm_result_value: Any, reference_date_value: Any = "")
     if not llm_text or not raw_plan or "_parse_errors" in raw_plan:
         if isinstance(raw_plan, dict) and raw_plan.get("_parse_errors"):
             warnings.extend(str(item) for item in _as_list(raw_plan.get("_parse_errors")) if str(item).strip())
+        fallback_datasets = _dataset_hints(question, table_catalog, domain)
+        current_columns = _current_columns(state)
         raw_plan = {
-            "needed_datasets": _dataset_hints(question, table_catalog, domain),
+            "needed_datasets": fallback_datasets,
             "required_params": _required_params(question, state, reference_date),
             "filters": _filters_from_question(question, domain, main_flow_filters),
-            "column_filters": _column_filters_from_question(question, table_catalog, _current_columns(state)),
-            "group_by": _group_by_from_question(question),
+            "column_filters": _column_filters_from_question(question, table_catalog, current_columns),
+            "group_by": _group_by_from_question(question, table_catalog, main_flow_filters, domain, current_columns, fallback_datasets),
             "analysis_goal": question,
         }
         source = "heuristic_fallback"

@@ -1,5 +1,27 @@
 # 19. Normalize Pandas Plan
 
+## 최근 변경: domain 기반 fallback 계산
+
+이 노드의 fallback 코드는 더 이상 `production`, `target`, `achievement_rate` 같은 제조 metric 이름을 Python 코드에 직접 고정하지 않습니다.
+
+LLM이 pandas 코드를 주지 못했을 때는 `intent_plan.metric_keys`, `intent_plan.metric_definitions`, `prompt_payload.domain.metrics`, `domain.datasets.<dataset_key>.primary_quantity_column`, 실제 table row의 숫자형 컬럼을 기준으로 계산 대상을 찾습니다.
+
+metric 계산은 domain metric에 등록된 `source_columns`, `formula`, `output_column`을 사용합니다.
+
+```json
+{
+  "metrics": {
+    "good_rate": {
+      "source_columns": ["pass_qty", "input_qty"],
+      "formula": "sum(pass_qty) / sum(input_qty) * 100",
+      "output_column": "good_rate"
+    }
+  }
+}
+```
+
+위처럼 등록하면 fallback code는 `pass_qty`, `input_qty`를 group_by 기준으로 합산한 뒤 `good_rate`를 계산합니다. 새로운 metric을 추가할 때 Python 코드를 수정하지 않고 domain 정의를 수정하는 방식으로 확장합니다.
+
 ## 이 노드 역할
 
 Pandas 코드 생성을 담당한 LLM 응답을 파싱하고, 실행 노드가 사용할 수 있는 `analysis_plan_payload` 형태로 정리하는 노드입니다.

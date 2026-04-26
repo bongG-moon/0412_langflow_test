@@ -58,10 +58,34 @@ def _unique_strings(values: list[Any]) -> list[str]:
     return result
 
 
+def _column_strings(value: Any) -> list[str]:
+    columns: list[str] = []
+    for item in _as_list(value):
+        if isinstance(item, dict):
+            text = str(item.get("name") or item.get("column") or "").strip()
+        else:
+            text = str(item or "").strip()
+        if text and text not in columns:
+            columns.append(text)
+    return columns
+
+
 def _default_filters() -> Dict[str, Any]:
     return {
         "filter_set_id": "manufacturing_main_flow_default",
         "description": "Standard semantic filters and required retrieval parameters. Put value expansion rules in domain.process_groups.",
+        "planner_terms": {
+            "fresh_retrieval": ["새로", "다시 조회", "신규", "fresh", "reload", "new data"],
+            "followup_reference": ["그 결과", "이 결과", "현재 결과", "그중", "그 중", "여기서", "방금", "이때", "그때", "위 결과", "앞선 결과", "해당 결과", "that result", "current result"],
+            "post_processing": ["별", "기준", "정렬", "비교", "비율", "rate", "ratio", "group", "by"],
+            "rank_desc": ["가장", "최대", "많", "높", "상위", "top", "max", "highest"],
+            "rank_asc": ["최소", "적", "낮", "하위", "min", "lowest"],
+            "sort": ["정렬", "순위", "rank", "sort", "order"],
+            "top_n": ["top", "상위", "하위"],
+            "grouping_suffixes": ["별", "별로", "기준", "기준으로", "단위"],
+            "grouping_prefixes": ["group by", "by", "per"],
+            "grouping_postfixes": ["wise", "level", "group"],
+        },
         "required_params": {
             "date": {
                 "display_name": "Date",
@@ -69,7 +93,8 @@ def _default_filters() -> Dict[str, Any]:
                 "value_type": "date",
                 "value_shape": "scalar",
                 "normalized_format": "YYYYMMDD",
-                "aliases": ["date", "work_date", "WORK_DT", "일자", "날짜"],
+                "column_candidates": ["WORK_DT", "WORK_DATE"],
+                "aliases": ["date", "work_date", "WORK_DT", "WORK_DATE", "일자", "날짜"],
             },
         },
         "filters": {
@@ -79,7 +104,7 @@ def _default_filters() -> Dict[str, Any]:
                 "value_type": "string",
                 "value_shape": "list",
                 "operator": "in",
-                "aliases": ["process", "process_name", "process_nm", "oper", "operation", "process label"],
+                "aliases": ["process", "process_name", "process_nm", "oper", "operation", "process label", "공정"],
             },
             "mode": {
                 "display_name": "Mode",
@@ -87,7 +112,7 @@ def _default_filters() -> Dict[str, Any]:
                 "value_type": "string",
                 "value_shape": "list",
                 "operator": "in",
-                "aliases": ["mode", "product mode"],
+                "aliases": ["mode", "product mode", "모드"],
             },
             "line": {
                 "display_name": "Line",
@@ -95,7 +120,7 @@ def _default_filters() -> Dict[str, Any]:
                 "value_type": "string",
                 "value_shape": "list",
                 "operator": "in",
-                "aliases": ["line", "line_name"],
+                "aliases": ["line", "line_name", "라인"],
             },
             "product_name": {
                 "display_name": "Product",
@@ -103,7 +128,7 @@ def _default_filters() -> Dict[str, Any]:
                 "value_type": "string",
                 "value_shape": "list",
                 "operator": "in",
-                "aliases": ["product", "product_name", "part", "device"],
+                "aliases": ["product", "product_name", "part", "device", "제품"],
             },
             "equipment_id": {
                 "display_name": "Equipment ID",
@@ -111,7 +136,7 @@ def _default_filters() -> Dict[str, Any]:
                 "value_type": "string",
                 "value_shape": "list",
                 "operator": "in",
-                "aliases": ["equipment", "equipment_id", "eqp", "tool"],
+                "aliases": ["equipment", "equipment_id", "eqp", "tool", "설비", "장비"],
             },
             "den": {
                 "display_name": "Density",
@@ -119,7 +144,7 @@ def _default_filters() -> Dict[str, Any]:
                 "value_type": "string",
                 "value_shape": "list",
                 "operator": "in",
-                "aliases": ["den", "density"],
+                "aliases": ["den", "density", "용량"],
             },
             "tech": {
                 "display_name": "Technology",
@@ -127,7 +152,7 @@ def _default_filters() -> Dict[str, Any]:
                 "value_type": "string",
                 "value_shape": "list",
                 "operator": "in",
-                "aliases": ["tech", "technology"],
+                "aliases": ["tech", "technology", "기술"],
             },
             "mcp_no": {
                 "display_name": "MCP No",
@@ -135,7 +160,7 @@ def _default_filters() -> Dict[str, Any]:
                 "value_type": "string",
                 "value_shape": "list",
                 "operator": "in",
-                "aliases": ["mcp", "mcp_no", "mcp number"],
+                "aliases": ["mcp", "mcp_no", "mcp number", "제품코드"],
             },
         },
     }
@@ -160,6 +185,10 @@ def _normalize_filter(key: str, value: Any) -> Dict[str, Any]:
         "operator": str(payload.get("operator") or "in").strip(),
         "aliases": aliases,
     }
+    for field in ("group_by_columns", "group_columns", "column_candidates", "columns"):
+        columns = _column_strings(payload.get(field))
+        if columns:
+            normalized[field] = columns
     if known_values:
         normalized["known_values"] = known_values
     if normalized_aliases:
@@ -169,7 +198,7 @@ def _normalize_filter(key: str, value: Any) -> Dict[str, Any]:
 
 def _normalize_required_param(key: str, value: Any) -> Dict[str, Any]:
     payload = deepcopy(value) if isinstance(value, dict) else {"description": str(value or "")}
-    return {
+    normalized = {
         "display_name": str(payload.get("display_name") or key).strip(),
         "description": str(payload.get("description") or "").strip(),
         "value_type": str(payload.get("value_type") or "string").strip(),
@@ -177,6 +206,32 @@ def _normalize_required_param(key: str, value: Any) -> Dict[str, Any]:
         "normalized_format": str(payload.get("normalized_format") or payload.get("format") or "").strip(),
         "aliases": _unique_strings([key, *_as_list(payload.get("aliases"))]),
     }
+    for field in ("group_by_columns", "group_columns", "column_candidates", "columns"):
+        columns = _column_strings(payload.get(field))
+        if columns:
+            normalized[field] = columns
+    return normalized
+
+
+def _normalize_planner_terms(value: Any) -> Dict[str, list[str]]:
+    terms: Dict[str, list[str]] = {}
+    if not isinstance(value, dict):
+        return terms
+    for key, raw in value.items():
+        source = raw
+        if isinstance(raw, dict):
+            source = raw.get("tokens") or raw.get("aliases") or raw.get("keywords") or raw.get("values")
+        tokens = _unique_strings([str(item) for item in _as_list(source) if str(item or "").strip()])
+        if str(key).strip() and tokens:
+            terms[str(key).strip()] = tokens
+    return terms
+
+
+def _merge_planner_terms(default_terms: Dict[str, list[str]], user_terms: Dict[str, list[str]]) -> Dict[str, list[str]]:
+    merged = {key: list(values) for key, values in default_terms.items()}
+    for key, values in user_terms.items():
+        merged[key] = _unique_strings([*_as_list(merged.get(key)), *values])
+    return merged
 
 
 def load_main_flow_filters(main_flow_filters_json: Any) -> Dict[str, Any]:
@@ -194,10 +249,13 @@ def load_main_flow_filters(main_flow_filters_json: Any) -> Dict[str, Any]:
     required_params = config.get("required_params") if isinstance(config.get("required_params"), dict) else {}
     default_filters = _default_filters()["filters"]
     default_required_params = _default_filters()["required_params"]
+    default_planner_terms = _normalize_planner_terms(_default_filters().get("planner_terms"))
+    user_planner_terms = _normalize_planner_terms(config.get("planner_terms"))
     merged = {key: deepcopy(value) for key, value in default_filters.items()}
     merged.update({str(key): value for key, value in filters.items() if isinstance(value, dict)})
     merged_required_params = {key: deepcopy(value) for key, value in default_required_params.items()}
     merged_required_params.update({str(key): value for key, value in required_params.items() if isinstance(value, dict)})
+    config["planner_terms"] = _merge_planner_terms(default_planner_terms, user_planner_terms)
     config["required_params"] = {key: _normalize_required_param(key, value) for key, value in merged_required_params.items()}
     config["filters"] = {key: _normalize_filter(key, value) for key, value in merged.items()}
     return {"main_flow_filters_payload": {"main_flow_filters": config, "main_flow_filter_errors": errors}}

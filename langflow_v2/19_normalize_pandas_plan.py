@@ -96,10 +96,109 @@ def _unique_strings(values: list[Any]) -> list[str]:
     return result
 
 
-def _fallback_code(plan: Dict[str, Any], columns: list[str]) -> str:
+def _domain_metrics(domain: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    metrics = domain.get("metrics") if isinstance(domain.get("metrics"), dict) else {}
+    return {str(key): value for key, value in metrics.items() if isinstance(value, dict)}
+
+
+def _domain_datasets(domain: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    datasets = domain.get("datasets") if isinstance(domain.get("datasets"), dict) else {}
+    return {str(key): value for key, value in datasets.items() if isinstance(value, dict)}
+
+
+def _metric_definitions(plan: Dict[str, Any], domain: Dict[str, Any]) -> list[Dict[str, Any]]:
+    result: list[Dict[str, Any]] = []
+    raw_definitions = plan.get("metric_definitions") if isinstance(plan.get("metric_definitions"), dict) else {}
+    domain_metrics = _domain_metrics(domain)
+    for metric_key in _as_list(plan.get("metric_keys")):
+        key = str(metric_key or "").strip()
+        metric = raw_definitions.get(key) if isinstance(raw_definitions.get(key), dict) else domain_metrics.get(key)
+        if isinstance(metric, dict):
+            result.append({**deepcopy(metric), "metric_key": key})
+    for key, metric in raw_definitions.items():
+        if isinstance(metric, dict) and str(key) not in {item.get("metric_key") for item in result}:
+            result.append({**deepcopy(metric), "metric_key": str(key)})
+    return result
+
+
+def _metric_formula_expression(formula: str, source_columns: list[str]) -> str:
+    expression = str(formula or "").strip()
+    if not expression:
+        return ""
+    allowed_names = {str(column) for column in source_columns}
+
+    def replace_sum(match: re.Match[str]) -> str:
+        column = match.group(1).strip().strip("'\"")
+        return f"result[{column!r}]" if column in allowed_names else "__INVALID_COLUMN__"
+
+    expression = re.sub(r"sum\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)", replace_sum, expression)
+    if "__INVALID_COLUMN__" in expression or "sum(" in expression.lower():
+        return ""
+    allowed_chars = set("0123456789+-*/(). []_'\"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    if any(char not in allowed_chars for char in expression):
+        return ""
+    if not all(token in expression for token in ("result[", "]")):
+        return ""
+    remainder = re.sub(r"result\[[^\]]+\]", "0", expression)
+    if re.search(r"[A-Za-z_]", remainder):
+        return ""
+    return expression
+
+
+def _metric_denominator_columns(formula: str, source_columns: list[str]) -> list[str]:
+    columns: list[str] = []
+    for match in re.finditer(r"/\s*sum\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)", str(formula or "")):
+        column = match.group(1).strip()
+        if column in source_columns:
+            columns.append(column)
+    return _unique_strings(columns)
+
+
+def _metric_fallback_code(plan: Dict[str, Any], domain: Dict[str, Any], columns: list[str], group_by: list[str], suffix: str) -> str:
+    for metric in _metric_definitions(plan, domain):
+        output_column = str(metric.get("output_column") or metric.get("metric_key") or "").strip()
+        source_columns = _unique_strings([str(column) for column in _as_list(metric.get("source_columns")) if str(column) in columns])
+        expression = _metric_formula_expression(str(metric.get("formula") or ""), source_columns)
+        if not output_column or not source_columns or not expression:
+            continue
+        if group_by:
+            prefix = f"result = df.groupby({group_by!r}, as_index=False)[{source_columns!r}].sum()\n"
+        else:
+            values = ", ".join(f"{column!r}: [df[{column!r}].sum()]" for column in source_columns)
+            prefix = f"result = pd.DataFrame({{{values}}})\n"
+        mask_columns = source_columns
+        denominator_columns = _metric_denominator_columns(str(metric.get("formula") or ""), source_columns)
+        mask = f"result[{mask_columns!r}].notna().all(axis=1)"
+        for column in denominator_columns:
+            mask += f" & (result[{column!r}] != 0)"
+        return prefix + f"result[{output_column!r}] = None\nmask = {mask}\nresult.loc[mask, {output_column!r}] = {expression}" + suffix
+    return ""
+
+
+def _numeric_columns(plan: Dict[str, Any], domain: Dict[str, Any], columns: list[str], rows: list[Dict[str, Any]]) -> list[str]:
+    candidates: list[str] = []
+    sort_plan = plan.get("sort") if isinstance(plan.get("sort"), dict) else {}
+    candidates.extend(_as_list(sort_plan.get("column")))
+    for metric in _metric_definitions(plan, domain):
+        candidates.extend(_as_list(metric.get("output_column") or metric.get("metric_key")))
+        candidates.extend(_as_list(metric.get("source_columns")))
+    datasets = _domain_datasets(domain)
+    for dataset_key in _as_list(plan.get("needed_datasets")):
+        dataset = datasets.get(str(dataset_key), {})
+        candidates.extend(_as_list(dataset.get("primary_quantity_column")))
+        candidates.extend(_as_list(dataset.get("numeric_columns") or dataset.get("measure_columns") or dataset.get("value_columns")))
+    for column in columns:
+        values = [row.get(column) for row in rows if isinstance(row, dict) and row.get(column) is not None]
+        if values and all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in values[:20]):
+            candidates.append(column)
+    return [column for column in _unique_strings([str(item) for item in candidates]) if column in columns]
+
+
+def _fallback_code(plan: Dict[str, Any], columns: list[str], domain: Dict[str, Any] | None = None, rows: list[Dict[str, Any]] | None = None) -> str:
+    domain = domain or {}
+    rows = rows or []
     group_by = [column for column in _as_list(plan.get("group_by")) if str(column) in columns]
-    numeric_priority = ["production", "target", "achievement_rate", "wip_qty", "hold_qty", "scrap_qty", "defect_qty", "inspection_qty", "pass_qty", "tested_qty", "yield_rate", "utilization_rate"]
-    numeric_cols = [column for column in numeric_priority if column in columns]
+    numeric_cols = _numeric_columns(plan, domain, columns, rows)
     sort_plan = plan.get("sort") if isinstance(plan.get("sort"), dict) else {}
     sort_column = str(sort_plan.get("column") or "").strip()
     ascending = bool(sort_plan.get("ascending")) if sort_plan else False
@@ -112,12 +211,9 @@ def _fallback_code(plan: Dict[str, Any], columns: list[str]) -> str:
         suffix += f"\nif {sort_column!r} in result.columns:\n    result = result.sort_values({sort_column!r}, ascending={ascending!r})"
     if top_n > 0:
         suffix += f"\nresult = result.head({top_n})"
-    if "production" in columns and "target" in columns:
-        if group_by:
-            prefix = f"result = df.groupby({group_by!r}, as_index=False)[['production', 'target']].sum()\n"
-        else:
-            prefix = "result = pd.DataFrame({'production': [df['production'].sum()], 'target': [df['target'].sum()]})\n"
-        return prefix + "result['achievement_rate'] = None\nmask = result['target'].notna() & (result['target'] != 0)\nresult.loc[mask, 'achievement_rate'] = result.loc[mask, 'production'] / result.loc[mask, 'target'] * 100" + suffix
+    metric_code = _metric_fallback_code(plan, domain, columns, group_by, suffix)
+    if metric_code:
+        return metric_code
     if group_by and numeric_cols:
         return f"result = df.groupby({group_by!r}, as_index=False)[{numeric_cols!r}].sum()" + suffix
     if numeric_cols:
@@ -133,10 +229,12 @@ def normalize_pandas_plan(llm_result_value: Any) -> Dict[str, Any]:
     retrieval = prompt_payload.get("retrieval_payload") if isinstance(prompt_payload.get("retrieval_payload"), dict) else {}
     table = prompt_payload.get("table") if isinstance(prompt_payload.get("table"), dict) else {}
     plan = prompt_payload.get("intent_plan") if isinstance(prompt_payload.get("intent_plan"), dict) else retrieval.get("intent_plan", {})
+    domain = prompt_payload.get("domain") if isinstance(prompt_payload.get("domain"), dict) else {}
     columns = [str(column) for column in _as_list(prompt_payload.get("columns") or table.get("columns"))]
+    rows = table.get("data") if isinstance(table.get("data"), list) else []
     if llm_result.get("skipped") or prompt_payload.get("skipped") or retrieval.get("skipped"):
         analysis_plan = {"code": "", "source": "skipped", "operations": [], "warnings": [prompt_payload.get("skip_reason") or llm_result.get("skip_reason") or retrieval.get("skip_reason") or "route skipped"]}
-        return {"analysis_plan_payload": {"skipped": True, "skip_reason": analysis_plan["warnings"][0], "analysis_plan": analysis_plan, "retrieval_payload": retrieval, "table": table, "intent_plan": plan if isinstance(plan, dict) else {}, "columns": columns}, "analysis_plan": analysis_plan}
+        return {"analysis_plan_payload": {"skipped": True, "skip_reason": analysis_plan["warnings"][0], "analysis_plan": analysis_plan, "retrieval_payload": retrieval, "table": table, "intent_plan": plan if isinstance(plan, dict) else {}, "domain": domain, "columns": columns}, "analysis_plan": analysis_plan}
 
     warnings = [str(item) for item in _as_list(llm_result.get("errors")) if str(item).strip()]
     raw_plan = _extract_json_object(str(llm_result.get("llm_text") or ""))
@@ -154,7 +252,7 @@ def normalize_pandas_plan(llm_result_value: Any) -> Dict[str, Any]:
         source = "direct_table"
         raw_plan = {**raw_plan, "operations": _as_list(raw_plan.get("operations")) or ["pass_through"]}
     elif not code:
-        code = _fallback_code(plan if isinstance(plan, dict) else {}, columns)
+        code = _fallback_code(plan if isinstance(plan, dict) else {}, columns, domain, [row for row in rows if isinstance(row, dict)])
         source = "fallback"
 
     analysis_plan = {
@@ -170,6 +268,7 @@ def normalize_pandas_plan(llm_result_value: Any) -> Dict[str, Any]:
             "retrieval_payload": retrieval,
             "table": table,
             "intent_plan": plan if isinstance(plan, dict) else {},
+            "domain": domain,
             "columns": columns,
         },
         "analysis_plan": analysis_plan,

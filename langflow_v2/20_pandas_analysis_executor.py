@@ -52,6 +52,17 @@ def _as_list(value: Any) -> list[Any]:
     return [value]
 
 
+def _unique_strings(values: list[Any]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if text and text not in seen:
+            seen.add(text)
+            result.append(text)
+    return result
+
+
 def _normalize_text(value: Any) -> str:
     return re.sub(r"\s+", "", str(value or "").strip().lower())
 
@@ -69,16 +80,6 @@ def _pd():
 
 SAFE_BUILTINS = {"len": len, "min": min, "max": max, "sum": sum, "sorted": sorted, "abs": abs, "round": round, "str": str, "int": int, "float": float, "list": list}
 FORBIDDEN_NAMES = {"open", "exec", "eval", "compile", "__import__", "os", "sys", "subprocess", "socket", "requests", "httpx"}
-FILTER_COLUMNS = {
-    "process_name": ["OPER_NAME", "PROCESS", "process"],
-    "process": ["OPER_NAME", "PROCESS", "process"],
-    "mode": ["MODE"],
-    "line_name": ["LINE", "line"],
-    "line": ["LINE", "line"],
-    "product_name": ["MCP_NO", "MODE", "DEN", "TECH", "PKG_TYPE1", "PKG_TYPE2"],
-    "product": ["MCP_NO", "MODE", "DEN", "TECH", "PKG_TYPE1", "PKG_TYPE2"],
-}
-PREFERRED_JOIN_COLUMNS = ["WORK_DT", "WORK_DATE", "OPER_NAME", "OPER_NUM", "MODE", "DEN", "TECH", "MCP_NO", "PKG_TYPE1", "PKG_TYPE2", "LINE", "line"]
 
 
 def _rows_columns(rows: list[Dict[str, Any]]) -> list[str]:
@@ -100,7 +101,67 @@ def _source_results(retrieval: Dict[str, Any]) -> list[Dict[str, Any]]:
     return [item for item in results if isinstance(item, dict)]
 
 
-def _merge_sources(source_results: list[Dict[str, Any]]) -> Dict[str, Any]:
+def _string_list(value: Any) -> list[str]:
+    result: list[str] = []
+    for item in _as_list(value):
+        parts = str(item or "").split(",") if isinstance(item, str) else [str(item or "")]
+        for part in parts:
+            text = part.strip()
+            if text and text not in result:
+                result.append(text)
+    return result
+
+
+def _dataset_matches(rule_value: Any, dataset_name: str) -> bool:
+    names = _string_list(rule_value)
+    if not names:
+        return True
+    dataset_parts = {part for part in str(dataset_name or "").split("+") if part}
+    dataset_parts.add(str(dataset_name or ""))
+    return any(name in dataset_parts for name in names)
+
+
+def _join_rule_columns(domain: Dict[str, Any], left_name: str, right_name: str, shared: set[str]) -> list[str]:
+    rules = domain.get("join_rules") if isinstance(domain.get("join_rules"), list) else []
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        keys = (
+            _string_list(rule.get("keys"))
+            or _string_list(rule.get("columns"))
+            or _string_list(rule.get("join_columns"))
+            or _string_list(rule.get("on"))
+        )
+        if not keys or any(key not in shared for key in keys):
+            continue
+        left_rule = rule.get("left_dataset", rule.get("left_dataset_key", rule.get("left")))
+        right_rule = rule.get("right_dataset", rule.get("right_dataset_key", rule.get("right")))
+        direct = _dataset_matches(left_rule, left_name) and _dataset_matches(right_rule, right_name)
+        swapped = _dataset_matches(left_rule, right_name) and _dataset_matches(right_rule, left_name)
+        if direct or swapped:
+            return keys
+    return []
+
+
+def _non_numeric_join_columns(left: Any, right: Any, shared: set[str]) -> list[str]:
+    pd = _pd()
+    result: list[str] = []
+    for column in sorted(shared):
+        if column not in left.columns or column not in right.columns:
+            continue
+        left_numeric = pd.api.types.is_numeric_dtype(left[column])
+        right_numeric = pd.api.types.is_numeric_dtype(right[column])
+        if not (left_numeric and right_numeric):
+            result.append(column)
+    return result
+
+
+def _select_join_columns(domain: Dict[str, Any], left_name: str, right_name: str, left: Any, right: Any, shared: set[str]) -> list[str]:
+    return _join_rule_columns(domain, left_name, right_name, shared) or _non_numeric_join_columns(left, right, shared) or sorted(shared)[:3]
+
+
+def _merge_sources(source_results: list[Dict[str, Any]], domain: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    domain = domain or {}
     valid = [item for item in source_results if item.get("success") and isinstance(item.get("data"), list)]
     failed = [item for item in source_results if not item.get("success")]
     if failed:
@@ -130,7 +191,7 @@ def _merge_sources(source_results: list[Dict[str, Any]]) -> Dict[str, Any]:
         right = frames[index]
         right_name = dataset_keys[index]
         shared = set(str(column) for column in merged.columns) & set(str(column) for column in right.columns)
-        join_columns = [column for column in PREFERRED_JOIN_COLUMNS if column in shared] or sorted(shared)[:3]
+        join_columns = _select_join_columns(domain, current_name, right_name, merged, right, shared)
         if not join_columns:
             return {"success": False, "data": [], "columns": [], "summary": f"No common join key between {current_name} and {right_name}.", "merge_notes": notes}
         merged = merged.merge(right, how="inner", on=join_columns, suffixes=("", f"_{right_name}"))
@@ -145,7 +206,7 @@ def _apply_filters(frame: Any, filters: Dict[str, Any]) -> tuple[Any, list[str]]
     pd = _pd()
     notes: list[str] = []
     for key, value in filters.items():
-        columns = [column for column in FILTER_COLUMNS.get(str(key), [str(key)]) if column in frame.columns]
+        columns = [str(key)] if str(key) in frame.columns else []
         values = [_normalize_text(item) for item in _as_list(value) if str(item).strip()]
         if not columns or not values:
             continue
@@ -193,10 +254,108 @@ def _apply_filter_plan(frame: Any, filter_plan: list[Any], column_filters: Dict[
     return frame, notes
 
 
-def _fallback_code(plan: Dict[str, Any], columns: list[str]) -> str:
+def _domain_metrics(domain: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    metrics = domain.get("metrics") if isinstance(domain.get("metrics"), dict) else {}
+    return {str(key): value for key, value in metrics.items() if isinstance(value, dict)}
+
+
+def _domain_datasets(domain: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    datasets = domain.get("datasets") if isinstance(domain.get("datasets"), dict) else {}
+    return {str(key): value for key, value in datasets.items() if isinstance(value, dict)}
+
+
+def _metric_definitions(plan: Dict[str, Any], domain: Dict[str, Any]) -> list[Dict[str, Any]]:
+    result: list[Dict[str, Any]] = []
+    raw_definitions = plan.get("metric_definitions") if isinstance(plan.get("metric_definitions"), dict) else {}
+    domain_metrics = _domain_metrics(domain)
+    for metric_key in _as_list(plan.get("metric_keys")):
+        key = str(metric_key or "").strip()
+        metric = raw_definitions.get(key) if isinstance(raw_definitions.get(key), dict) else domain_metrics.get(key)
+        if isinstance(metric, dict):
+            result.append({**deepcopy(metric), "metric_key": key})
+    for key, metric in raw_definitions.items():
+        if isinstance(metric, dict) and str(key) not in {item.get("metric_key") for item in result}:
+            result.append({**deepcopy(metric), "metric_key": str(key)})
+    return result
+
+
+def _metric_formula_expression(formula: str, source_columns: list[str]) -> str:
+    expression = str(formula or "").strip()
+    if not expression:
+        return ""
+    allowed_names = {str(column) for column in source_columns}
+
+    def replace_sum(match: re.Match[str]) -> str:
+        column = match.group(1).strip().strip("'\"")
+        return f"result[{column!r}]" if column in allowed_names else "__INVALID_COLUMN__"
+
+    expression = re.sub(r"sum\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)", replace_sum, expression)
+    if "__INVALID_COLUMN__" in expression or "sum(" in expression.lower():
+        return ""
+    allowed_chars = set("0123456789+-*/(). []_'\"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    if any(char not in allowed_chars for char in expression):
+        return ""
+    if not all(token in expression for token in ("result[", "]")):
+        return ""
+    remainder = re.sub(r"result\[[^\]]+\]", "0", expression)
+    if re.search(r"[A-Za-z_]", remainder):
+        return ""
+    return expression
+
+
+def _metric_denominator_columns(formula: str, source_columns: list[str]) -> list[str]:
+    columns: list[str] = []
+    for match in re.finditer(r"/\s*sum\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)", str(formula or "")):
+        column = match.group(1).strip()
+        if column in source_columns:
+            columns.append(column)
+    return _unique_strings(columns)
+
+
+def _metric_fallback_code(plan: Dict[str, Any], domain: Dict[str, Any], columns: list[str], group_by: list[str], suffix: str) -> str:
+    for metric in _metric_definitions(plan, domain):
+        output_column = str(metric.get("output_column") or metric.get("metric_key") or "").strip()
+        source_columns = _unique_strings([str(column) for column in _as_list(metric.get("source_columns")) if str(column) in columns])
+        expression = _metric_formula_expression(str(metric.get("formula") or ""), source_columns)
+        if not output_column or not source_columns or not expression:
+            continue
+        if group_by:
+            prefix = f"result = df.groupby({group_by!r}, as_index=False)[{source_columns!r}].sum()\n"
+        else:
+            values = ", ".join(f"{column!r}: [df[{column!r}].sum()]" for column in source_columns)
+            prefix = f"result = pd.DataFrame({{{values}}})\n"
+        denominator_columns = _metric_denominator_columns(str(metric.get("formula") or ""), source_columns)
+        mask = f"result[{source_columns!r}].notna().all(axis=1)"
+        for column in denominator_columns:
+            mask += f" & (result[{column!r}] != 0)"
+        return prefix + f"result[{output_column!r}] = None\nmask = {mask}\nresult.loc[mask, {output_column!r}] = {expression}" + suffix
+    return ""
+
+
+def _numeric_columns(plan: Dict[str, Any], domain: Dict[str, Any], columns: list[str], rows: list[Dict[str, Any]]) -> list[str]:
+    candidates: list[str] = []
+    sort_plan = plan.get("sort") if isinstance(plan.get("sort"), dict) else {}
+    candidates.extend(_as_list(sort_plan.get("column")))
+    for metric in _metric_definitions(plan, domain):
+        candidates.extend(_as_list(metric.get("output_column") or metric.get("metric_key")))
+        candidates.extend(_as_list(metric.get("source_columns")))
+    datasets = _domain_datasets(domain)
+    for dataset_key in _as_list(plan.get("needed_datasets")):
+        dataset = datasets.get(str(dataset_key), {})
+        candidates.extend(_as_list(dataset.get("primary_quantity_column")))
+        candidates.extend(_as_list(dataset.get("numeric_columns") or dataset.get("measure_columns") or dataset.get("value_columns")))
+    for column in columns:
+        values = [row.get(column) for row in rows if isinstance(row, dict) and row.get(column) is not None]
+        if values and all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in values[:20]):
+            candidates.append(column)
+    return [column for column in _unique_strings([str(item) for item in candidates]) if column in columns]
+
+
+def _fallback_code(plan: Dict[str, Any], columns: list[str], domain: Dict[str, Any] | None = None, rows: list[Dict[str, Any]] | None = None) -> str:
+    domain = domain or {}
+    rows = rows or []
     group_by = [column for column in _as_list(plan.get("group_by")) if str(column) in columns]
-    numeric_priority = ["production", "target", "achievement_rate", "wip_qty", "hold_qty", "scrap_qty", "defect_qty", "inspection_qty", "pass_qty", "tested_qty", "yield_rate", "utilization_rate"]
-    numeric_cols = [column for column in numeric_priority if column in columns]
+    numeric_cols = _numeric_columns(plan, domain, columns, rows)
     sort_plan = plan.get("sort") if isinstance(plan.get("sort"), dict) else {}
     sort_column = str(sort_plan.get("column") or "").strip()
     ascending = bool(sort_plan.get("ascending")) if sort_plan else False
@@ -209,12 +368,9 @@ def _fallback_code(plan: Dict[str, Any], columns: list[str]) -> str:
         suffix += f"\nif {sort_column!r} in result.columns:\n    result = result.sort_values({sort_column!r}, ascending={ascending!r})"
     if top_n > 0:
         suffix += f"\nresult = result.head({top_n})"
-    if "production" in columns and "target" in columns:
-        if group_by:
-            prefix = f"result = df.groupby({group_by!r}, as_index=False)[['production', 'target']].sum()\n"
-        else:
-            prefix = "result = pd.DataFrame({'production': [df['production'].sum()], 'target': [df['target'].sum()]})\n"
-        return prefix + "result['achievement_rate'] = None\nmask = result['target'].notna() & (result['target'] != 0)\nresult.loc[mask, 'achievement_rate'] = result.loc[mask, 'production'] / result.loc[mask, 'target'] * 100" + suffix
+    metric_code = _metric_fallback_code(plan, domain, columns, group_by, suffix)
+    if metric_code:
+        return metric_code
     if group_by and numeric_cols:
         return f"result = df.groupby({group_by!r}, as_index=False)[{numeric_cols!r}].sum()" + suffix
     if numeric_cols:
@@ -274,6 +430,7 @@ def execute_pandas_analysis(analysis_plan_payload_value: Any, retrieval_payload_
 
     plan = payload.get("intent_plan") if isinstance(payload.get("intent_plan"), dict) else retrieval.get("intent_plan", {})
     analysis_plan = payload.get("analysis_plan") if isinstance(payload.get("analysis_plan"), dict) else {}
+    domain = payload.get("domain") if isinstance(payload.get("domain"), dict) else {}
     state = retrieval.get("state") if isinstance(retrieval.get("state"), dict) else {}
     source_results = _source_results(retrieval)
     if payload.get("skipped") or retrieval.get("skipped"):
@@ -284,7 +441,7 @@ def execute_pandas_analysis(analysis_plan_payload_value: Any, retrieval_payload_
         result = {**retrieval["early_result"], "success": False, "data": [], "summary": retrieval["early_result"].get("response", ""), "analysis_logic": "early_result", "source_results": source_results, "state": state, "intent_plan": plan}
         return {"analysis_result": result}
 
-    table = payload.get("table") if isinstance(payload.get("table"), dict) and payload.get("table") else _merge_sources(source_results)
+    table = payload.get("table") if isinstance(payload.get("table"), dict) and payload.get("table") else _merge_sources(source_results, domain)
     rows = table.get("data") if isinstance(table.get("data"), list) else []
     columns = table.get("columns") if isinstance(table.get("columns"), list) else _rows_columns(rows)
     if not table.get("success") or not rows:
@@ -294,14 +451,14 @@ def execute_pandas_analysis(analysis_plan_payload_value: Any, retrieval_payload_
     code = str(analysis_plan.get("code") or "").strip()
     analysis_logic = str(analysis_plan.get("source") or "analysis_plan")
     if not code:
-        code = _fallback_code(plan, [str(column) for column in columns])
+        code = _fallback_code(plan, [str(column) for column in columns], domain, [row for row in rows if isinstance(row, dict)])
         analysis_plan = {**analysis_plan, "code": code, "source": "fallback"}
         analysis_logic = "fallback"
 
     executed = _execute_code(code, rows, plan)
     if not executed.get("success") and analysis_logic == "llm":
         primary_error = executed.get("error_message", "")
-        fallback = _fallback_code(plan, [str(column) for column in columns])
+        fallback = _fallback_code(plan, [str(column) for column in columns], domain, [row for row in rows if isinstance(row, dict)])
         executed = _execute_code(fallback, rows, plan)
         if executed.get("success"):
             code = fallback

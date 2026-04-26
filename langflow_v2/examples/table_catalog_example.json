@@ -11,6 +11,7 @@
       "db_key": "PKG_RPT",
       "required_params": ["date"],
       "grain": ["WORK_DT", "OPER_NAME", "MODE", "DEN", "TECH"],
+      "primary_quantity_column": "production",
       "columns": [
         {"name": "WORK_DT", "type": "date", "description": "Work date"},
         {"name": "OPER_NAME", "type": "string", "description": "Process name"},
@@ -41,6 +42,7 @@
       "db_key": "PKG_RPT",
       "required_params": ["date"],
       "grain": ["WORK_DT", "OPER_NAME", "MODE", "DEN", "TECH"],
+      "primary_quantity_column": "target",
       "columns": [
         {"name": "WORK_DT", "type": "date"},
         {"name": "OPER_NAME", "type": "string"},

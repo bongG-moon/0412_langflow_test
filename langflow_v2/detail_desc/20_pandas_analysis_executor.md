@@ -1,5 +1,19 @@
 # 20. Pandas Analysis Executor
 
+## 최근 변경: domain 기반 fallback 재시도
+
+LLM pandas 코드가 실패하거나 비어 있을 때 사용하는 fallback code가 `19_normalize_pandas_plan.py`와 같은 domain 기반 로직을 사용하도록 변경되었습니다.
+
+즉, executor fallback도 더 이상 `production`, `target`, `achievement_rate` 같은 특정 metric 이름에 의존하지 않습니다. `analysis_plan_payload.domain.metrics`와 `intent_plan.metric_definitions`의 `source_columns`, `formula`, `output_column`을 기준으로 계산 코드를 만들고 실행합니다.
+
+이 변경으로 LLM 코드가 실패해도 domain에 등록된 새 metric은 Python 코드 수정 없이 fallback 계산까지 이어질 수 있습니다.
+
+## 최근 변경: filter/join 하드코딩 제거
+
+여러 source result를 executor 내부에서 병합해야 할 때는 `domain.join_rules`를 먼저 사용합니다. rule이 없으면 공통 비수치 컬럼을 generic fallback으로 사용하며, `WORK_DT`, `OPER_NAME`, `MCP_NO` 같은 제조 컬럼 우선순위는 executor 코드에 직접 두지 않습니다.
+
+semantic filter도 executor에서 임의 컬럼으로 매핑하지 않습니다. 표준 의미 key(`process_name`, `mode` 등)는 `Normalize Intent Plan`이 `table_catalog.filter_mappings`를 기준으로 만든 `filter_plan`을 통해 실제 컬럼에 적용됩니다. executor의 `_apply_filters` fallback은 filter key 자체가 실제 DataFrame 컬럼명일 때만 적용됩니다.
+
 ## 이 노드 역할
 
 정규화된 pandas 분석 계획을 실제로 실행하고, 결과를 표준 `analysis_result`로 만드는 노드입니다.
@@ -281,7 +295,7 @@ LLM 코드 실행이 실패했고 그 코드가 LLM에서 온 경우에만 fallb
 
 ```python
 primary_error = executed.get("error_message", "")
-fallback = _fallback_code(plan, [str(column) for column in columns])
+fallback = _fallback_code(plan, [str(column) for column in columns], domain, rows)
 executed = _execute_code(fallback, rows, plan)
 ```
 

@@ -289,6 +289,17 @@ columns in each dataset. This is what lets one table use `process`, another use
 `process_name`, and another use `process_nm` while the intent plan still says
 `process_name`.
 
+The same mapping is used for semantic grouping. For example, if a user asks
+`mode별`, the normalizer first resolves the standard key `mode`, then looks up
+that key in `table_catalog.datasets.*.filter_mappings` to produce the real
+group-by column. This means a table can map `mode` to `MODE`, `MODEL_CODE`, or
+any other actual column without changing Python code.
+
+For ranking questions such as "가장 많은 모드", define the quantity column in
+`domain.datasets.<dataset_key>.primary_quantity_column` or
+`table_catalog.datasets.<dataset_key>.primary_quantity_column`. The normalizer
+uses that metadata instead of hardcoded metric column names.
+
 Example file: `examples/table_catalog_example.json`
 
 Recommended shape:
@@ -305,6 +316,7 @@ Recommended shape:
       "db_key": "PKG_RPT",
       "required_params": ["date"],
       "grain": ["WORK_DT", "OPER_NAME", "MODE"],
+      "primary_quantity_column": "production",
       "columns": [{"name": "WORK_DT"}, {"name": "OPER_NAME"}, {"name": "MODE"}, {"name": "production"}],
       "filter_mappings": {
         "process_name": ["OPER_NAME"],
@@ -342,9 +354,22 @@ downstream planning:
 - `value_shape`: usually `list`
 - `operator`: usually `in`
 
+`planner_terms` is an optional, editable section for general conversation and
+analysis hints that are not manufacturing values. The normalizer uses these only
+as fallback or safety guards around the LLM result. Typical keys are
+`fresh_retrieval`, `followup_reference`, `post_processing`, `rank_desc`,
+`rank_asc`, `sort`, `top_n`, and grouping syntax such as
+`grouping_suffixes`. Keep process, product, dataset, and metric business
+knowledge in `domain`; keep these generic routing/analysis words here.
+
 Do not put operational value expansion rules here by default. For example,
 `WB공정 -> ["W/B1", "W/B2"]` belongs in `domain.process_groups`, not in
 `main_flow_filters.value_aliases`.
+
+Likewise, product-family values such as `DDR5 -> {"mode": ["DDR5"]}` should
+live in `domain.products`, and metric-to-dataset expansion such as
+`achievement_rate -> ["production", "target"]` should live in
+`domain.metrics.required_datasets`.
 
 Example file: `examples/main_flow_filters_example.json`
 
@@ -358,6 +383,9 @@ accepted for special cases, but the recommended operating model is:
 - `main_flow_filters`: standard meaning keys and aliases
 - `table_catalog.filter_mappings`: standard key to real table columns
 - `domain.process_groups`: process group aliases and expansion values
+- `domain.products` / `domain.terms`: domain aliases that emit standard filters
+- `domain.datasets`: dataset aliases or keywords
+- `domain.metrics`: metric aliases, formulas, and required datasets
 
 Follow-up behavior:
 
@@ -404,6 +432,21 @@ For a question such as `어제 wb공정 생산달성율을 mode별로 알려줘`
 `Normalize Intent Plan` expands the retrieval plan to both `production` and
 `target` from the metric's `required_datasets`, then the pandas step calculates
 `achievement_rate`.
+
+The pandas fallback path also uses these metric definitions. `Normalize Pandas
+Plan` and `Pandas Analysis Executor` read `source_columns`, `formula`, and
+`output_column` from `intent_plan.metric_definitions` or `domain.metrics`; they
+do not hardcode `production`, `target`, or `achievement_rate` in fallback
+calculation logic.
+
+When multiple source results need to be merged for pandas analysis, `Build
+Pandas Prompt` and `Pandas Analysis Executor` first use `domain.join_rules`.
+If no matching rule exists, they use generic common non-numeric columns as a
+fallback instead of a manufacturing-specific hardcoded join-column list.
+Semantic filters are applied through `intent_plan.filter_plan`, which is built
+from `table_catalog.filter_mappings`; the executor's legacy filter fallback
+only applies a filter when the filter key is already an actual DataFrame
+column.
 
 Canonical example file:
 
